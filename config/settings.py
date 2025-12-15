@@ -19,5 +19,10 @@ class Settings:
     URL_LOGIN = f"{BASE_URL}/users/sign-in"
     URL_DEVICES = f"{BASE_URL}/boards"
     URL_DEVICES2 = f"{BASE_URL}/kiwi"
+<<<<<<< HEAD
+=======
+    URL_MODEL_B = f"{BASE_URL}/models"
+    URL_MODEL_K = f"{BASE_URL}/versions"
+>>>>>>> master
     URL_INFO = f"{BASE_URL}/boards/info"
     URL_M2M = f"{BASE_URL}/m2m"

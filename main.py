@@ -1,3 +1,4 @@
+# main.py
 import streamlit as st
 from config.settings import Settings
 from backend.api_client import CoreClient
@@ -6,6 +7,7 @@ from backend.Device.data_device import process_devices
 from backend.Info.data_info import process_devicesInfo
 
 # Importamos las nuevas vistas
+from frontend.views import devices_view, m2m_view, info_view
 from frontend.views import devices_view, m2m_view, info_view
 
 # --- CONFIGURACIÓN INICIAL ---
@@ -19,6 +21,7 @@ if not st.session_state['token']:
     col1, col2, col3 = st.columns([1,2,1])
     with col2:
         st.title("🔐 Login Core")
+        if st.button("Conectar con Credenciales"):
         if st.button("Conectar con Credenciales"):
             with st.spinner("Autenticando..."):
                 client = CoreClient()
@@ -59,6 +62,7 @@ with st.sidebar:
         st.rerun()
 
 # Pestañas principales
+tab1, tab2, tab3 = st.tabs(["📡 Dispositivos", "📶 Comunicaciones M2M", "💽 Informacion de Software"])
 tab1, tab2, tab3 = st.tabs(["📡 Dispositivos", "📶 Comunicaciones M2M", "💽 Informacion de Software"])
 
 with tab1:

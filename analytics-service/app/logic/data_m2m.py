@@ -11,7 +11,7 @@ def safe_json(x):
         return x
     if isinstance(x, str):
         try: 
-            return json.loads(x.replace("'", '"'))  # Arreglo típico del Excel
+            return json.loads(x.replace("'", '"')) 
         except:
             return None
     return None
@@ -56,7 +56,7 @@ def format_bytes_to_readable(value_bytes):
         return "N/A"
     
     mb = value_bytes / 1_048_576  # bytes → MB
-    if mb >= 1000:  # si es mayor a ~3GB
+    if mb >= 1024:  # si es mayor a ~1GB
         gb = mb / 1024
         return f"{gb:.2f} GB"
     else:
@@ -118,7 +118,7 @@ def process_m2m(json_data):
     df['cons_month_mb'] = df['cons_month'] / 1048576.0 
     
     # --- MEJORA LÓGICA 2: Categorización (Tiers) ---
-    # Esto permite hacer gráficos de pastel o barras agrupadas
+
     df['usage_tier_daily'] = df['cons_daily_mb'].apply(determine_usage_tier)
     df['usage_tier_month'] = df['cons_month_mb'].apply(determine_usage_tier)
     # Strings legibles para Tablas/Tooltips

@@ -1,35 +1,66 @@
 # Archivo: main.py
+from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 import pandas as pd
+import numpy as np
+import math
 
-# 1. Importamos el Cliente
+# 1. Imports de tu proyecto
 from app.api_client import CoreClient
-
-# 2. Importamos TUS funciones de lógica con sus nombres reales
 from app.logic.data_device import prepare_boards, prepare_kiwi
 from app.logic.data_info import process_devicesInfo
 from app.logic.data_m2m import process_m2m
 
-app = FastAPI()
-
 # Instancia global del cliente
 client = CoreClient()
 
-@app.on_event("startup")
-async def startup_event():
-    """Login inicial al arrancar el servicio"""
+# 2. DEFINICIÓN DEL LIFESPAN
+@asynccontextmanager
+async def lifespan(app: FastAPI):
     print("🚀 Iniciando Analytics Service...")
     if client.login():
         print("✅ Conectado a Core API")
     else:
-        print("⚠️ No se pudo loguear al inicio (se reintentará en la petición)")
+        print("⚠️ No se pudo loguear al inicio")
+    yield
+    print("🛑 Apagando servicio...")
+
+app = FastAPI(lifespan=lifespan)
+
+# ==========================================
+# 3. CONFIGURACIÓN CORS
+# ==========================================
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# --- HELPER "NUCLEAR" PARA LIMPIAR NaN ---
+def clean_df(df):
+    """
+    Convierte todo a objetos y elimina NaN.
+    Esta es la solución definitiva para el error 'float values are not JSON compliant'.
+    """
+    if df.empty:
+        return df
+    
+    df_obj = df.astype(object)
+    
+    df_obj_clean =df_obj.where(pd.notnull(df_obj), None)
+    #print(df_obj_clean)
+    
+    return df_obj_clean
+
 
 # ==========================================
 # ENDPOINT 1: DEVICES (Boards)
 # ==========================================
 @app.get("/internal/dashboard/devices")
 def get_devices_dashboard():
-    # 1. Obtener datos crudos
     raw_devices = client.get_devicesB()
     raw_models = client.get_deviceModels()
     raw_software = client.get_deviceSoftware()
@@ -37,29 +68,30 @@ def get_devices_dashboard():
     if not raw_devices:
         return []
 
-    # 2. Convertir auxiliares a DataFrame (prepare_boards los necesita así)
     df_models = pd.DataFrame(raw_models)
     df_soft = pd.DataFrame(raw_software)
 
-    # 3. Procesar (prepare_boards acepta lista o DF en el primer argumento)
     try:
-        df_final = prepare_boards(
-            raw_devices, 
-            df_models=df_models, 
-            df_soft=df_soft
-        )
+        # Lógica de negocio
+        df_final = prepare_boards(raw_devices, df_models=df_models, df_soft=df_soft)
+        
+        # Limpieza 
+        df_final = clean_df(df_final)
+        df_final = df_final.head(100)
         return df_final.to_dict(orient="records")
     except Exception as e:
         print(f"❌ Error en Devices: {e}")
+        import traceback
+        traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
 
 # ==========================================
-# ENDPOINT 1.1: DEVICES KIWI (Extra)
+# ENDPOINT 1.1: DEVICES KIWI
 # ==========================================
 @app.get("/internal/dashboard/kiwi")
 def get_kiwi_dashboard():
     raw_kiwi = client.get_devicesKiwi()
-    raw_software = client.get_deviceSoftware() # Kiwi usa versiones de software para el modelo
+    raw_software = client.get_deviceSoftware()
 
     if not raw_kiwi:
         return []
@@ -67,11 +99,14 @@ def get_kiwi_dashboard():
     df_soft = pd.DataFrame(raw_software)
 
     try:
-        # Usamos tu función prepare_kiwi
         df_final = prepare_kiwi(raw_kiwi, df_soft=df_soft)
+        df_final = clean_df(df_final)
+        df_final = df_final.head(100)
         return df_final.to_dict(orient="records")
     except Exception as e:
         print(f"❌ Error en Kiwi: {e}")
+        import traceback
+        traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
 
 # ==========================================
@@ -79,16 +114,16 @@ def get_kiwi_dashboard():
 # ==========================================
 @app.get("/internal/dashboard/info")
 def get_info_dashboard():
-    # 1. Obtener datos crudos
     raw_info = client.get_deviceInfo()
-    
-    # 2. Procesar
-    # Tu función process_devicesInfo espera el JSON/Lista cruda, NO un DataFrame
     try:
         df_final = process_devicesInfo(raw_info)
+        df_final = clean_df(df_final)
+        df_final = df_final.head(100)
         return df_final.to_dict(orient="records")
     except Exception as e:
         print(f"❌ Error en Info: {e}")
+        import traceback
+        traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
 
 # ==========================================
@@ -96,16 +131,16 @@ def get_info_dashboard():
 # ==========================================
 @app.get("/internal/dashboard/m2m")
 def get_m2m_dashboard():
-    # 1. Obtener datos crudos
     raw_m2m = client.get_m2m()
-
-    # 2. Procesar
-    # Tu función process_m2m espera el JSON/Lista cruda
     try:
         df_final = process_m2m(raw_m2m)
+        df_final = clean_df(df_final)
+        df_final = df_final.head(100)
         return df_final.to_dict(orient="records")
     except Exception as e:
         print(f"❌ Error en M2M: {e}")
+        import traceback
+        traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
 
 if __name__ == "__main__":

@@ -11,7 +11,6 @@ class Settings:
     USER = os.getenv("CORE_USERNAME")
     PASSWORD = os.getenv("CORE_PASSWORD")
     
-    # Asegúrate de que este UUID es correcto
     DEFAULT_TENANT_UUID = "90be8c8a-f462-4a3e-afcf-d8f34094eaa8" 
 
     # ENDPOINTS

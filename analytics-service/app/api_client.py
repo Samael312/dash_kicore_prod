@@ -2,7 +2,6 @@
 import requests
 import pandas as pd
 import os
-# CORRECCIÓN DE IMPORT: Ahora está dentro de app.config
 from app.config.settings import Settings
 
 class CoreClient:
@@ -20,8 +19,8 @@ class CoreClient:
             data = response.json()
             if data.get("login") is True:
                 self.token = data.get("apiToken")
-                # Actualizamos headers automáticamente tras el login
                 self.headers = {'Authorization': f"Basic {self.token}"}
+                print(f"TOKEN: {self.headers}")
                 print("Login exitoso.")
                 return self.token
             return None
@@ -56,14 +55,12 @@ class CoreClient:
                 return []
 
         try:
-            # print(f"Pidiendo datos a: {url}") # Descomentar para debug
             resp = requests.get(url, headers=self.headers, params=params)
             resp.raise_for_status() 
 
             data = resp.json()
             list_data = []
 
-            # Detectar si es dict con lista interna (Lógica original conservada)
             if isinstance(data, dict):
                 list_data = None
                 for k, v in data.items():
@@ -71,14 +68,11 @@ class CoreClient:
                         list_data = v
                         break
                 if list_data is None:
-                    # print(f"Dict recibido sin lista interna compatible.")
                     list_data = []
             elif isinstance(data, list):
                 list_data = data
             else:
                 list_data = []
-
-            # Exportar a Excel (Opcional, pero mantenido como pediste)
             if list_data: 
                 self._export_columns_to_excel(list_data, filename)
             
@@ -89,7 +83,6 @@ class CoreClient:
             return []
 
     def _export_columns_to_excel(self, data, filename="resources/output.xlsx"):
-        # CORRECCIÓN: Crear carpeta resources si no existe
         os.makedirs(os.path.dirname(filename), exist_ok=True)
         
         if not data:
@@ -97,6 +90,5 @@ class CoreClient:
         try:
             df = pd.DataFrame(data)
             df.to_excel(filename, index=False)
-            # print(f"Datos exportados a {filename}")
         except Exception as e:
             print(f"Error exportando a Excel: {e}")

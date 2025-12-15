@@ -137,8 +137,4 @@ def process_m2m(json_data):
     df['alarms_json'] = df.get('alarms', pd.Series([None]*len(df))).apply(safe_json)
     df['alarm_count'] = df['alarms_json'].apply(extract_alarm_count)
 
-<<<<<<< HEAD
     return df
-=======
-    return df
->>>>>>> master

@@ -54,13 +54,15 @@ with st.spinner("Descargando datos de la flota..."):
         df_models = pd.DataFrame()
         df_soft = pd.DataFrame()
 
-
+    # 2. PROCESAMOS LOS DISPOSITIVOS PASANDO LOS DATAFRAMES AUXILIARES
+    # Aquí está el cambio clave: pasamos df_models y df_soft
     df_dev = prepare_boards(raw_dev, df_models=df_models, df_soft=df_soft)
     df_dev2 = prepare_kiwi(raw_dev2, df_models=df_models, df_soft=df_soft)
     
     df_m2m = process_m2m(raw_m2m)
     df_info = process_devicesInfo(raw_info)
-
+    # --- CREACIÓN DE DATAFRAMES PARA MODELOS Y SOFTWARE ---
+    # Convertimos los datos crudos (que deberían ser listas de diccionarios) a DataFrames.
     try:
         df_models = pd.DataFrame(raw_models)
         df_soft = pd.DataFrame(raw_soft)
@@ -97,10 +99,16 @@ with tab1:
         devices_view.render(df_dev2)
 
 with tab2:
-
+    # Delegamos el pintado a la vista de M2M
     m2m_view.render(df_m2m)
 
 with tab3:
- 
+    # Aquí puedes añadir una vista para modelos y software si es necesario
+    # Por ahora, solo renderizamos la vista de Info que ya tenías
     info_view.render(df_info)
     
+    # Ejemplo de uso de los DataFrames de Modelos y Software (descomentar si se va a usar)
+    # st.subheader("Modelos de Dispositivo")
+    # st.dataframe(df_models)
+    # st.subheader("Versiones de Software")
+    # st.dataframe(df_soft)

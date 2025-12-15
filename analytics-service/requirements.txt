@@ -1,0 +1,6 @@
+fastapi
+uvicorn
+pandas
+requests
+python-dotenv
+openpyxl  # Necesario porque tu código exporta a Excel

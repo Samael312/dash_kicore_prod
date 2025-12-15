@@ -1,0 +1,15 @@
+# Ignorar entorno virtual y cache de Python
+__pycache__/
+*.py[cod]
+*$py.class
+venv/
+.venv/
+myenv/
+.myenv/
+env/
+.env
+
+# Ignorar datos temporales
+*.csv
+*.xlsx
+.ipynb_checkpoints/

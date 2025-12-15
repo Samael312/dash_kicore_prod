@@ -1,13 +1,67 @@
 import pandas as pd
-import json
 
-import pandas as pd
+def _merge_model_info(df_devices, df_software, df_models):
+    """
+    Función auxiliar para cruzar Dispositivos -> Software -> Modelos
+    y obtener el nombre real del modelo.
+    """
+    if df_devices.empty:
+        return df_devices
 
-def process_devices(data):
+    # 1. Asegurar que las columnas clave sean string para evitar errores de merge
+    # Dispositivos -> Software
+    if 'version_uuid' in df_devices.columns:
+        df_devices['version_uuid'] = df_devices['version_uuid'].astype(str)
+    
+    # Software
+    if not df_software.empty and 'uuid' in df_software.columns:
+        df_software['uuid'] = df_software['uuid'].astype(str)
+        df_software['model_uuid'] = df_software['model_uuid'].astype(str)
+    
+    # Modelos
+    if not df_models.empty and 'uuid' in df_models.columns:
+        df_models['uuid'] = df_models['uuid'].astype(str)
+
+    # 2. Merge: Dispositivos + Software (por version_uuid)
+    # Usamos left join para no perder dispositivos sin versión conocida
+    df_merged = df_devices.merge(
+        df_software[['uuid', 'model_uuid']], 
+        left_on='version_uuid', 
+        right_on='uuid', 
+        how='left', 
+        suffixes=('', '_soft')
+    )
+
+    # 3. Merge: Resultado + Modelos (por model_uuid)
+    df_final = df_merged.merge(
+        df_models[['uuid', 'name']], 
+        left_on='model_uuid', 
+        right_on='uuid', 
+        how='left', 
+        suffixes=('', '_model_real')
+    )
+
+    # 4. Consolidar el nombre del model
+    # Si encontramos el nombre en la tabla modelos, lo usamos. Si no, fallback a 'name' original o 'Genérico'
+    if 'name_model_real' in df_final.columns:
+        df_final['real_model_name'] = df_final['name_model_real'].fillna('Desconocido')
+    else:
+        df_final['real_model_name'] = 'Desconocido'
+        
+    return df_final
+
+def _get_status_label(val):
+    s = str(val).lower()
+    return "Conectado" if s in ["terminado", "online", "connected", "true"] else "Desconectado"
+
+def _get_enabled_label(val):
+    s = str(val).lower()
+    return "Habilitado" if s in ["terminado", "asignado", "fabricado", "true", "enabled"] else "Deshabilitado"
+
+def prepare_boards(data, df_models=None, df_soft=None):
     """
-    Procesa datos crudos (lista de dicts o DataFrame) y normaliza columnas.
+    Prepara Boards. Acepta DataFrames opcionales de modelos y software para enriquecer la data.
     """
-    # 1. Convertir a DataFrame si es una lista (JSON)
     if isinstance(data, list):
         if not data: # Si la lista está vacía
             return pd.DataFrame()

@@ -23,23 +23,23 @@ class CoreClient:
             return None
 
     def get_m2m(self):
-        return self._get_data(Settings.URL_M2M, "m2m.xlsx", params={"tenant_uuid": Settings.DEFAULT_TENANT_UUID})
+        return self._get_data(Settings.URL_M2M, "resources/m2m.xlsx", params={"tenant_uuid": Settings.DEFAULT_TENANT_UUID})
 
     def get_devicesB(self):
-        return self._get_data(Settings.URL_DEVICES, "boards.xlsx")
+        return self._get_data(Settings.URL_DEVICES, "resources/boards.xlsx")
 
     def get_devicesKiwi(self):
-        return self._get_data(Settings.URL_DEVICES2, "kiwi.xlsx")
+        return self._get_data(Settings.URL_DEVICES2, "resources/kiwi.xlsx")
 
     def get_deviceInfo(self):
-        return self._get_data(Settings.URL_INFO, "info.xlsx")
+        return self._get_data(Settings.URL_INFO, "resources/info.xlsx")
     def get_deviceModels(self):
-        return self._get_data(Settings.URL_MODEL_B, "models.xlsx")
+        return self._get_data(Settings.URL_MODEL_B, "resources/models.xlsx")
     def get_deviceSoftware(self):
-        return self._get_data(Settings.URL_MODEL_K, "software.xlsx")
+        return self._get_data(Settings.URL_MODEL_K, "resources/software.xlsx")
 
 # VERIFICACION DE DATOS
-    def _get_data(self, url, filename="output.xlsx", params=None):
+    def _get_data(self, url, filename="resources/output.xlsx", params=None):
         if not self.token:
             print("No hay token de sesión. Conéctese primero.")
             return []
@@ -88,7 +88,7 @@ class CoreClient:
             return []
 
 #FUNCION EXPORTACION EN EXCEL
-    def _export_columns_to_excel(self, data, filename="output.xlsx"):
+    def _export_columns_to_excel(self, data, filename="resources/output.xlsx"):
         if not data:
             print(f"No hay datos para exportar a {filename}")
             return

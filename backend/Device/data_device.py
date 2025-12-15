@@ -42,7 +42,7 @@ def _merge_model_info(df_devices, df_software, df_models):
         suffixes=('', '_model_real')
     )
 
-    # 4. Consolidar el nombre del modelo
+    # 4. Consolidar el nombre del model
     # Si encontramos el nombre en la tabla modelos, lo usamos. Si no, fallback a 'name' original o 'Genérico'
     if 'name_model_real' in df_final.columns:
         df_final['real_model_name'] = df_final['name_model_real'].fillna('Desconocido')

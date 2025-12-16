@@ -1,9 +1,32 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { api } from '../services/api';
 import TableCard from '../components/TableCard';
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts';
-import { getConsistentColor, COLORS } from '../utils/colors';
-import { Search, ChevronLeft, ChevronRight } from 'lucide-react'; // Necesitarás estos iconos
+import { getConsistentColor } from '../utils/colors';
+import { Search, ChevronLeft, ChevronRight } from 'lucide-react';
+
+// --- CHART.JS IMPORTS ---
+import {
+  Chart as ChartJS,
+  CategoryScale,
+  LinearScale,
+  BarElement,
+  ArcElement,
+  Title,
+  Tooltip,
+  Legend,
+} from 'chart.js';
+import { Bar, Pie } from 'react-chartjs-2';
+
+// --- REGISTRO DE COMPONENTES CHART.JS ---
+ChartJS.register(
+  CategoryScale,
+  LinearScale,
+  BarElement,
+  ArcElement,
+  Title,
+  Tooltip,
+  Legend
+);
 
 const KiwiView = () => {
   const [rawData, setRawData] = useState([]);
@@ -13,7 +36,7 @@ const KiwiView = () => {
   const [selectedSoftware, setSelectedSoftware] = useState("Todos");
   const [searchTerm, setSearchTerm] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
-  const [rowsPerPage, setRowsPerPage] = useState(10); // Por defecto 10
+  const [rowsPerPage, setRowsPerPage] = useState(10); 
 
   useEffect(() => {
     const fetch = async () => {
@@ -29,7 +52,7 @@ const KiwiView = () => {
     fetch();
   }, []);
 
-  // --- 1. LÓGICA DE FILTRADO COMBINADO (Dropdown + Buscador) ---
+  // --- 1. LÓGICA DE FILTRADO COMBINADO ---
   const filteredData = useMemo(() => {
     let data = rawData;
 
@@ -52,26 +75,24 @@ const KiwiView = () => {
   }, [rawData, selectedSoftware, searchTerm]);
 
   // --- RESETEAR PÁGINA AL FILTRAR ---
-  // Si cambias el filtro o buscas algo, vuelves a la página 1
   useEffect(() => {
     setCurrentPage(1);
   }, [selectedSoftware, searchTerm, rowsPerPage]);
 
-  // --- 2. LÓGICA DE PAGINACIÓN (Slicing) ---
+  // --- 2. PAGINACIÓN ---
   const totalItems = filteredData.length;
   const totalPages = Math.ceil(totalItems / rowsPerPage);
   
-  // Calculamos los índices para cortar el array
   const indexOfLastItem = currentPage * rowsPerPage;
   const indexOfFirstItem = indexOfLastItem - rowsPerPage;
   const currentItems = filteredData.slice(indexOfFirstItem, indexOfLastItem);
 
-  // --- KPIs y GRÁFICAS (Usan filteredData para reflejar la búsqueda global) ---
+  // --- KPIs y ESTADÍSTICAS ---
   const totalDevices = filteredData.length;
   const onlineDevices = filteredData.filter(d => d.status_clean === 'Conectado').length;
   const onlinePct = totalDevices > 0 ? ((onlineDevices / totalDevices) * 100).toFixed(1) : 0;
 
-  // Stats Gráficas
+  // Stats para Gráficas
   const softwareStats = useMemo(() => {
     const counts = filteredData.reduce((acc, curr) => {
       const m = curr.model || "Desconocido"; 
@@ -94,7 +115,60 @@ const KiwiView = () => {
 
   const uniqueSoftware = [...new Set(rawData.map(d => d.model))].sort();
 
-  // --- COMPONENTE LEYENDA ---
+  // --- PREPARACIÓN DATOS CHART.JS ---
+
+  // 1. Bar Chart Data (Versiones)
+  const softwareChartData = {
+    labels: softwareStats.map(d => d.name),
+    datasets: [{
+      label: 'Dispositivos',
+      data: softwareStats.map(d => d.value),
+      backgroundColor: softwareStats.map((_, i) => getConsistentColor(i)),
+      borderRadius: 4,
+    }]
+  };
+
+  const barOptions = {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: { display: false }, // Ocultamos leyenda interna (usamos la custom)
+      tooltip: { backgroundColor: 'rgba(0,0,0,0.8)' }
+    },
+    scales: {
+      x: { 
+        ticks: { 
+          autoSkip: false, 
+          maxRotation: 45, 
+          minRotation: 15,
+          font: { size: 12}
+        } 
+      },
+      y: { beginAtZero: true }
+    }
+  };
+
+  // 2. Pie Chart Data (Estado) - Simulando Donut
+  const statusChartData = {
+    labels: statusStats.map(d => d.name),
+    datasets: [{
+      data: statusStats.map(d => d.value),
+      backgroundColor: statusStats.map(d => d.name === 'Conectado' ? '#10b981' : '#ef4444'),
+      borderWidth: 1,
+      borderColor: '#ffffff',
+    }]
+  };
+
+  const pieOptions = {
+    responsive: true,
+    maintainAspectRatio: false,
+    cutout: '60%', // Esto crea el efecto "Donut" similar al innerRadius de Recharts
+    plugins: {
+      legend: { position: 'bottom', labels: { usePointStyle: true, padding: 20 } }
+    }
+  };
+
+  // --- COMPONENTE LEYENDA (Custom) ---
   const LegendBox = ({ data, title }) => (
     <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 h-full w-full overflow-hidden flex flex-col">
       <h5 className="text-xs font-bold text-gray-500 uppercase mb-2 pb-2 border-b flex-shrink-0">{title}</h5>
@@ -156,36 +230,20 @@ const KiwiView = () => {
 
       {/* 3. GRÁFICAS */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 w-full">
+        
+        {/* Gráfico de Barras */}
         <div className="lg:col-span-2 bg-white p-6 rounded shadow border border-gray-200 w-full flex flex-col">
           <h3 className="text-lg font-bold text-gray-700 mb-4">Distribución por Versión</h3>
-          <div className="h-96 w-full flex-grow">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={softwareStats} layout="horizontal" margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
-                <XAxis dataKey="name" tick={{fontSize: 11}} interval={0} angle={-15} textAnchor="end" height={60}/>
-                <YAxis allowDecimals={false} />
-                <Tooltip cursor={{fill: '#f3f4f6'}} wrapperStyle={{ outline: 'none' }} />
-                <Bar dataKey="value" name="Dispositivos" radius={[4, 4, 0, 0]}>
-                  {softwareStats.map((entry, index) => <Cell key={`cell-${index}`} fill={getConsistentColor(index)} />)}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
+          <div className="h-96 w-full flex-grow relative">
+            <Bar data={softwareChartData} options={barOptions} />
           </div>
         </div>
 
+        {/* Gráfico Circular y Leyenda */}
         <div className="bg-white p-6 rounded shadow border border-gray-200 w-full flex flex-col h-full min-h-[500px]">
           <h3 className="text-lg font-bold text-gray-700 mb-2">Estado Actual</h3>
-          <div className="h-64 w-full flex-shrink-0">
-            <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                <Pie data={statusStats} innerRadius={60} outerRadius={80} dataKey="value" paddingAngle={5}>
-                  {statusStats.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={entry.name === 'Conectado' ? '#10b981' : '#ef4444'} />
-                  ))}
-                </Pie>
-                <Tooltip />
-                <Legend verticalAlign="bottom" height={36}/>
-              </PieChart>
-            </ResponsiveContainer>
+          <div className="h-64 w-full flex-shrink-0 relative">
+            <Pie data={statusChartData} options={pieOptions} />
           </div>
           <div className="mt-4 flex-grow w-full overflow-hidden">
              <LegendBox data={softwareStats} title="Versiones Detectadas" />
@@ -230,9 +288,9 @@ const KiwiView = () => {
           </div>
         </div>
 
-        {/* TABLA (Pasamos los items de la página actual) */}
+        {/* TABLA */}
         <TableCard 
-          title="" // Título vacío porque ya tenemos la barra arriba
+          title="" 
           data={currentItems}
           columns={[
             { header: "UUID", accessor: "uuid", render: (row) => <span className="font-mono text-xs text-gray-600">{row.uuid}</span> },
@@ -269,7 +327,6 @@ const KiwiView = () => {
               <ChevronLeft size={16} className="mr-1" /> Anterior
             </button>
             
-            {/* Indicador de página simple */}
             <span className="px-3 py-1 bg-blue-100 text-blue-800 font-bold rounded border border-blue-200">
               {currentPage}
             </span>

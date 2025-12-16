@@ -1,14 +1,40 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { api } from '../services/api';
 import TableCard from '../components/TableCard';
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts';
-import { getConsistentColor, COLORS } from '../utils/colors';
+import { getConsistentColor } from '../utils/colors';
 import { Search, ChevronLeft, ChevronRight } from 'lucide-react';
+
+// --- CHART.JS IMPORTS ---
+import {
+  Chart as ChartJS,
+  CategoryScale,
+  LinearScale,
+  BarElement,
+  ArcElement,
+  Title,
+  Tooltip,
+  Legend,
+} from 'chart.js';
+import { Bar, Pie, getElementAtEvent } from 'react-chartjs-2';
+
+// --- REGISTRO ---
+ChartJS.register(
+  CategoryScale,
+  LinearScale,
+  BarElement,
+  ArcElement,
+  Title,
+  Tooltip,
+  Legend
+);
 
 const DevicesView = () => {
   const [rawData, setRawData] = useState([]);
   const [loading, setLoading] = useState(false);
   
+  // Referencia para el gráfico de barras (necesaria para el click)
+  const barChartRef = useRef(null);
+
   // Filtros y Paginación
   const [selectedModel, setSelectedModel] = useState("Todos");
   const [selectedOrg, setSelectedOrg] = useState("Todas");
@@ -51,7 +77,7 @@ const DevicesView = () => {
       const lowerTerm = searchTerm.toLowerCase();
       data = data.filter(d => 
         (d.uuid && d.uuid.toLowerCase().includes(lowerTerm)) ||
-        (d.name && d.name.toLowerCase().includes(lowerTerm)) || // Añadido name
+        (d.name && d.name.toLowerCase().includes(lowerTerm)) || 
         (d.ssid && d.ssid.toLowerCase().includes(lowerTerm)) ||
         (d.model && d.model.toLowerCase().includes(lowerTerm))
       );
@@ -64,7 +90,7 @@ const DevicesView = () => {
     setCurrentPage(1);
   }, [selectedModel, selectedOrg, drilldownModel, searchTerm, rowsPerPage]);
 
-  // --- LÓGICA DE PAGINACIÓN (Slicing) ---
+  // --- LÓGICA DE PAGINACIÓN ---
   const totalItems = filteredData.length;
   const totalPages = Math.ceil(totalItems / rowsPerPage);
   
@@ -72,7 +98,9 @@ const DevicesView = () => {
   const indexOfFirstItem = indexOfLastItem - rowsPerPage;
   const currentItems = filteredData.slice(indexOfFirstItem, indexOfLastItem);
 
-  // --- AGREGACIONES ---
+  // --- PREPARACIÓN DATOS CHART.JS ---
+
+  // 1. Datos Barras (Modelos)
   const modelStats = useMemo(() => {
     const counts = filteredData.reduce((acc, curr) => {
       const m = curr.model || "Desconocido";
@@ -84,6 +112,30 @@ const DevicesView = () => {
       .sort((a, b) => b.value - a.value);
   }, [filteredData]);
 
+  const barChartData = {
+    labels: modelStats.map(d => d.name),
+    datasets: [{
+      label: 'Dispositivos',
+      data: modelStats.map(d => d.value),
+      backgroundColor: modelStats.map((_, i) => getConsistentColor(i)),
+      borderRadius: 4,
+    }]
+  };
+
+  // Manejador de Click en Barras (Chart.js)
+  const handleBarClick = (event) => {
+    const { current: chart } = barChartRef;
+    if (!chart) return;
+
+    const element = getElementAtEvent(chart, event);
+    if (element.length > 0) {
+      const { index } = element[0];
+      const modelName = barChartData.labels[index];
+      setDrilldownModel(modelName);
+    }
+  };
+
+  // 2. Datos Pies (Status y Enabled)
   const getPieStats = (field) => {
     const counts = filteredData.reduce((acc, curr) => {
       const k = curr[field] || "Desconocido";
@@ -96,16 +148,50 @@ const DevicesView = () => {
   const statusData = getPieStats('status_clean');
   const enabledData = getPieStats('enabled_clean');
 
-  const uniqueModels = [...new Set(rawData.map(d => d.model))].sort();
-  const uniqueOrgs = [...new Set(rawData.map(d => d.organization))].sort();
+  const statusChartData = {
+    labels: statusData.map(d => d.name),
+    datasets: [{
+      data: statusData.map(d => d.value),
+      backgroundColor: statusData.map(d => d.name === 'Conectado' ? '#00CC96' : '#EF553B'),
+      borderWidth: 1
+    }]
+  };
 
-  const handleBarClick = (data) => {
-    if (data && data.activePayload) {
-      setDrilldownModel(data.activePayload[0].payload.name);
+  const enabledChartData = {
+    labels: enabledData.map(d => d.name),
+    datasets: [{
+      data: enabledData.map(d => d.value),
+      backgroundColor: enabledData.map(d => d.name === 'Habilitado' ? '#636EFA' : '#AB63FA'),
+      borderWidth: 1
+    }]
+  };
+
+  // OPCIONES CHART.JS
+  const barOptions = {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: { display: false },
+    },
+    scales: {
+      x: { display: false }, // Ocultamos eje X para limpieza visual (similar a tu Recharts)
+      y: { beginAtZero: true }
     }
   };
 
-  // --- LEYENDA ---
+  const pieOptions = {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: { position: 'bottom', labels: { usePointStyle: true, boxWidth: 8 } }
+    }
+  };
+
+  // Helpers UI
+  const uniqueModels = [...new Set(rawData.map(d => d.model))].sort();
+  const uniqueOrgs = [...new Set(rawData.map(d => d.organization))].sort();
+
+  // --- LEYENDA (Sidebar) ---
   const renderLegend = (data, title) => (
     <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 h-full w-full overflow-hidden flex flex-col">
       <h4 className="text-xs font-bold text-gray-500 uppercase mb-2 pb-2 border-b flex-shrink-0">{title}</h4>
@@ -170,25 +256,21 @@ const DevicesView = () => {
 
       {/* 2. ZONA SUPERIOR: BARRAS + LISTA */}
       <div className="grid grid-cols-12 gap-6 w-full">
+        {/* GRÁFICO BARRAS */}
         <div className="col-span-12 lg:col-span-9 bg-white p-6 rounded shadow border border-gray-200 w-full flex flex-col">
           <h3 className="text-lg font-bold text-gray-700 mb-4">Distribución por Modelo</h3>
-          <div className="h-96 w-full flex-grow">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={modelStats} onClick={handleBarClick} className="cursor-pointer" margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
-                <XAxis dataKey="name" hide />
-                <YAxis />
-                <Tooltip cursor={{fill: '#f0f0f0'}} wrapperStyle={{ outline: 'none' }} />
-                <Bar dataKey="value" name="Dispositivos" radius={[4, 4, 0, 0]}>
-                  {modelStats.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={getConsistentColor(index)} />
-                  ))}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
+          <div className="h-96 w-full flex-grow relative">
+             <Bar 
+               ref={barChartRef} 
+               data={barChartData} 
+               options={barOptions} 
+               onClick={handleBarClick} 
+             />
           </div>
           <p className="text-xs text-center text-gray-400 mt-2">Haz clic en las barras para filtrar</p>
         </div>
 
+        {/* LISTA LATERAL */}
         <div className="col-span-12 lg:col-span-3 bg-white p-4 rounded shadow border border-gray-200 w-full h-full min-h-[400px]">
            {renderLegend(modelStats, "Modelos Visibles")}
         </div>
@@ -196,37 +278,19 @@ const DevicesView = () => {
 
       {/* 3. ZONA MEDIA: TARTAS */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6 w-full">
+        {/* CONECTIVIDAD */}
         <div className="bg-white p-6 rounded shadow border border-gray-200 w-full">
           <h3 className="text-lg font-bold text-gray-700 mb-4 text-center">Conectividad</h3>
-          <div className="h-72 w-full">
-            <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                <Pie data={statusData} innerRadius={80} outerRadius={100} dataKey="value" paddingAngle={5}>
-                  {statusData.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={entry.name === 'Conectado' ? '#00CC96' : '#EF553B'} />
-                  ))}
-                </Pie>
-                <Tooltip />
-                <Legend verticalAlign="bottom" height={36}/>
-              </PieChart>
-            </ResponsiveContainer>
+          <div className="h-72 w-full relative">
+             <Pie data={statusChartData} options={pieOptions} />
           </div>
         </div>
 
+        {/* OPERATIVIDAD */}
         <div className="bg-white p-6 rounded shadow border border-gray-200 w-full">
           <h3 className="text-lg font-bold text-gray-700 mb-4 text-center">Operatividad</h3>
-          <div className="h-72 w-full">
-            <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                <Pie data={enabledData} innerRadius={80} outerRadius={100} dataKey="value" paddingAngle={5}>
-                   {enabledData.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={entry.name === 'Habilitado' ? '#636EFA' : '#AB63FA'} />
-                  ))}
-                </Pie>
-                <Tooltip />
-                <Legend verticalAlign="bottom" height={36}/>
-              </PieChart>
-            </ResponsiveContainer>
+          <div className="h-72 w-full relative">
+             <Pie data={enabledChartData} options={pieOptions} />
           </div>
         </div>
       </div>

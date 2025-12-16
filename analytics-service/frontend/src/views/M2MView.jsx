@@ -1,9 +1,32 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { api } from '../services/api';
 import TableCard from '../components/TableCard';
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts';
 import { getConsistentColor, COLORS } from '../utils/colors';
 import { Search, ChevronLeft, ChevronRight } from 'lucide-react';
+
+// --- CHART.JS IMPORTS ---
+import {
+  Chart as ChartJS,
+  CategoryScale,
+  LinearScale,
+  BarElement,
+  ArcElement,
+  Title,
+  Tooltip,
+  Legend,
+} from 'chart.js';
+import { Bar, Pie } from 'react-chartjs-2';
+
+// --- REGISTRO COMPONENTES CHART.JS ---
+ChartJS.register(
+  CategoryScale,
+  LinearScale,
+  BarElement,
+  ArcElement,
+  Title,
+  Tooltip,
+  Legend
+);
 
 const M2MView = () => {
   const [rawData, setRawData] = useState([]);
@@ -30,7 +53,7 @@ const M2MView = () => {
     fetch();
   }, []);
 
-  // --- 1. LÓGICA DE FILTRADO (Org + Búsqueda) ---
+  // --- 1. LÓGICA DE FILTRADO ---
   const filteredData = useMemo(() => {
     let data = rawData;
 
@@ -39,7 +62,7 @@ const M2MView = () => {
       data = data.filter(d => d.organization === selectedOrg);
     }
 
-    // B. Filtro por Buscador (Texto)
+    // B. Filtro por Buscador
     if (searchTerm.trim() !== "") {
       const lowerTerm = searchTerm.toLowerCase();
       data = data.filter(d => 
@@ -58,20 +81,19 @@ const M2MView = () => {
     setCurrentPage(1);
   }, [selectedOrg, searchTerm, rowsPerPage]);
 
-  // --- 2. LÓGICA DE PAGINACIÓN (Slicing) ---
+  // --- 2. PAGINACIÓN ---
   const totalItems = filteredData.length;
   const totalPages = Math.ceil(totalItems / rowsPerPage);
-  
   const indexOfLastItem = currentPage * rowsPerPage;
   const indexOfFirstItem = indexOfLastItem - rowsPerPage;
-  // Estos son los items que VERÁ la tabla
   const currentItems = filteredData.slice(indexOfFirstItem, indexOfLastItem);
 
-  // --- KPIS y HELPERS (Usan filteredData para ver el total global de la búsqueda) ---
+  // --- KPIS y HELPERS ---
   const totalSims = filteredData.length;
   const totalAlarms = filteredData.reduce((sum, d) => sum + (d.alarm_count || 0), 0);
   const simsWithAlerts = filteredData.filter(d => (d.alarm_count || 0) > 0).length;
 
+  // Helper para agrupar datos
   const getGroupStats = (field) => {
     const counts = filteredData.reduce((acc, curr) => {
       const k = curr[field] || "N/A";
@@ -83,6 +105,7 @@ const M2MView = () => {
       .sort((a, b) => b.value - a.value);
   };
 
+  // --- DATOS PARA GRÁFICAS ---
   const statusStats = getGroupStats("status_clean");
   const networkStats = getGroupStats("network_type");
   const countryStats = getGroupStats("country_code");
@@ -91,19 +114,107 @@ const M2MView = () => {
   const dailyTierStats = getGroupStats("usage_tier_daily");
   const monthlyTierStats = getGroupStats("usage_tier_month");
 
-  const consumptionData = activeTab === 'diario' 
-    ? { stats: dailyTierStats, field: 'cons_daily_mb', total: filteredData.reduce((s, d) => s + (d.cons_daily_mb||0), 0) }
-    : { stats: monthlyTierStats, field: 'cons_month_mb', total: filteredData.reduce((s, d) => s + (d.cons_month_mb||0), 0) };
+  const consumptionStats = activeTab === 'diario' ? dailyTierStats : monthlyTierStats;
+  const consumptionTotal = activeTab === 'diario' 
+    ? filteredData.reduce((s, d) => s + (d.cons_daily_mb||0), 0)
+    : filteredData.reduce((s, d) => s + (d.cons_month_mb||0), 0);
 
-  // Componente Leyenda
-  const LegendBox = ({ data, title }) => (
-    <div className="bg-gray-50 border border-gray-200 rounded p-3 h-72 overflow-y-auto w-full">
-      <h5 className="text-xs font-bold text-gray-500 mb-2 uppercase sticky top-0 bg-gray-50">{title}</h5>
+  // --- CONFIGURACIÓN CHART.JS ---
+
+  // 1. Configuración Gráfica Estado (Pie)
+  const statusChartData = {
+    labels: statusStats.map(d => d.name),
+    datasets: [{
+      data: statusStats.map(d => d.value),
+      backgroundColor: statusStats.map((_, i) => COLORS[i % COLORS.length]),
+      borderWidth: 1
+    }]
+  };
+
+  // 2. Configuración Gráfica Red (Pie)
+  const networkChartData = {
+    labels: networkStats.map(d => d.name),
+    datasets: [{
+      data: networkStats.map(d => d.value),
+      backgroundColor: networkStats.map((_, i) => COLORS[(i + 2) % COLORS.length]),
+      borderWidth: 1
+    }]
+  };
+
+  // 3. Configuración Países (Pie) - Usamos getConsistentColor
+  const countryChartData = {
+    labels: countryStats.map(d => d.name),
+    datasets: [{
+      data: countryStats.map(d => d.value),
+      backgroundColor: countryStats.map((_, i) => getConsistentColor(i)),
+      borderWidth: 0
+    }]
+  };
+
+  // 4. Configuración Planes (Pie)
+  const planChartData = {
+    labels: planStats.map(d => d.name),
+    datasets: [{
+      data: planStats.map(d => d.value),
+      backgroundColor: planStats.map((_, i) => getConsistentColor(i + 5)), // Offset color
+      borderWidth: 0
+    }]
+  };
+
+  // 5. Configuración Consumo (Bar)
+  const consumptionChartData = {
+    labels: consumptionStats.map(d => d.name),
+    datasets: [{
+      label: 'SIMs',
+      data: consumptionStats.map(d => d.value),
+      backgroundColor: '#3b82f6',
+      borderRadius: 4,
+    }]
+  };
+
+  // Opciones Comunes
+  const commonPieOptions = {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: { position: 'bottom', labels: { usePointStyle: true, boxWidth: 8 } }
+    }
+  };
+
+  const hiddenLegendOptions = {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: { display: false }, // Ocultamos leyenda porque usamos la CustomBox
+    }
+  };
+
+  const barOptions = {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: { display: false },
+      tooltip: { 
+        callbacks: { label: (ctx) => `${ctx.raw} SIMs` } 
+      }
+    },
+    scales: {
+      y: { beginAtZero: true }
+    }
+  };
+
+  // Componente Leyenda Personalizada (Sin cambios lógicos, solo visuales)
+  const LegendBox = ({ data, title, colorOffset = 0 }) => (
+    <div className="bg-gray-50 border border-gray-200 rounded p-3 h-72 overflow-y-auto w-full custom-scrollbar">
+      <h5 className="text-xs font-bold text-gray-500 mb-2 uppercase sticky top-0 bg-gray-50 z-10">{title}</h5>
       {data.map((item, idx) => (
-        <div key={idx} className="flex justify-between items-center text-sm py-1 border-b border-gray-100 last:border-0">
+        <div key={idx} className="flex justify-between items-center text-sm py-1 border-b border-gray-100 last:border-0 hover:bg-gray-100 transition-colors">
           <div className="flex items-center gap-2 overflow-hidden">
-            <div className="w-2 h-2 min-w-[8px] rounded-full" style={{ backgroundColor: getConsistentColor(idx) }}></div>
-            <span className="truncate" title={item.name}>{item.name}</span>
+            <div 
+              className="w-3 h-3 min-w-[12px] rounded-full shadow-sm" 
+              style={{ backgroundColor: getConsistentColor(idx + colorOffset) }}
+            ></div>
+            <span className="truncate text-gray-700" title={item.name}>{item.name}</span>
           </div>
           <span className="font-bold text-blue-800 ml-2">{item.value}</span>
         </div>
@@ -120,7 +231,7 @@ const M2MView = () => {
         <div className="w-full md:w-64">
            <label className="block text-sm font-medium text-gray-700 mb-1">🏢 Organización</label>
            <select 
-             className="border p-2 rounded w-full bg-gray-50 border-gray-300"
+             className="border p-2 rounded w-full bg-gray-50 border-gray-300 focus:ring-2 focus:ring-blue-500 outline-none"
              value={selectedOrg}
              onChange={(e) => setSelectedOrg(e.target.value)}
            >
@@ -133,106 +244,79 @@ const M2MView = () => {
       {/* KPIS */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 w-full">
         <div className="bg-white p-4 rounded shadow border-l-4 border-blue-500 w-full">
-          <div className="text-gray-500 text-sm">Total SIMs</div>
-          <div className="text-3xl font-bold text-blue-900">{totalSims}</div>
+          <div className="text-gray-500 text-sm font-semibold uppercase tracking-wide">Total SIMs</div>
+          <div className="text-3xl font-bold text-blue-900 mt-1">{totalSims}</div>
         </div>
         <div className="bg-white p-4 rounded shadow border-l-4 border-red-500 w-full">
-          <div className="text-gray-500 text-sm">Alarmas Totales</div>
-          <div className="text-3xl font-bold text-red-900">{totalAlarms}</div>
+          <div className="text-gray-500 text-sm font-semibold uppercase tracking-wide">Alarmas Totales</div>
+          <div className="text-3xl font-bold text-red-900 mt-1">{totalAlarms}</div>
         </div>
         <div className="bg-white p-4 rounded shadow border-l-4 border-orange-500 w-full">
-          <div className="text-gray-500 text-sm">SIMs con Alertas</div>
-          <div className="text-3xl font-bold text-orange-900">{simsWithAlerts}</div>
+          <div className="text-gray-500 text-sm font-semibold uppercase tracking-wide">SIMs con Alertas</div>
+          <div className="text-3xl font-bold text-orange-900 mt-1">{simsWithAlerts}</div>
         </div>
       </div>
 
       {/* GRÁFICAS SUPERIORES (Estado y Red) */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 w-full">
-        <div className="bg-white p-4 rounded shadow border w-full flex flex-col">
+        <div className="bg-white p-4 rounded shadow border border-gray-200 w-full flex flex-col">
           <h3 className="font-bold text-gray-700 mb-4">🟢 Estado</h3>
-          <div className="h-72 w-full">
-            <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                <Pie data={statusStats} innerRadius={60} outerRadius={80} dataKey="value" paddingAngle={2}>
-                  {statusStats.map((entry, index) => <Cell key={index} fill={COLORS[index % COLORS.length]} />)}
-                </Pie>
-                <Tooltip />
-                <Legend verticalAlign="bottom" height={36}/>
-              </PieChart>
-            </ResponsiveContainer>
+          <div className="h-72 w-full relative">
+            <Pie data={statusChartData} options={commonPieOptions} />
           </div>
         </div>
 
-        <div className="bg-white p-4 rounded shadow border w-full flex flex-col">
+        <div className="bg-white p-4 rounded shadow border border-gray-200 w-full flex flex-col">
           <h3 className="font-bold text-gray-700 mb-4">📡 Tipo de Red</h3>
-          <div className="h-72 w-full">
-            <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                <Pie data={networkStats} innerRadius={60} outerRadius={80} dataKey="value" paddingAngle={2}>
-                  {networkStats.map((entry, index) => <Cell key={index} fill={COLORS[(index + 2) % COLORS.length]} />)}
-                </Pie>
-                <Tooltip />
-                <Legend verticalAlign="bottom" height={36}/>
-              </PieChart>
-            </ResponsiveContainer>
+          <div className="h-72 w-full relative">
+            <Pie data={networkChartData} options={commonPieOptions} />
           </div>
         </div>
       </div>
 
       {/* GRÁFICAS COMPLEJAS (País y Planes) */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 w-full">
-        <div className="bg-white p-4 rounded shadow border w-full">
+        
+        {/* Países */}
+        <div className="bg-white p-4 rounded shadow border border-gray-200 w-full">
           <h3 className="font-bold text-gray-700 mb-4">🌍 Distribución Geográfica</h3>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <div className="sm:col-span-2 h-72 w-full">
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie data={countryStats} outerRadius={80} dataKey="value">
-                    {countryStats.map((entry, index) => <Cell key={index} fill={getConsistentColor(index)} />)}
-                  </Pie>
-                  <Tooltip />
-                </PieChart>
-              </ResponsiveContainer>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 h-full">
+            <div className="sm:col-span-2 h-72 w-full relative">
+              <Pie data={countryChartData} options={hiddenLegendOptions} />
             </div>
             <div className="sm:col-span-1 w-full">
-              <LegendBox data={countryStats} title="Por País" />
+              <LegendBox data={countryStats} title="Por País" colorOffset={0} />
             </div>
           </div>
         </div>
 
-        <div className="bg-white p-4 rounded shadow border w-full">
+        {/* Planes */}
+        <div className="bg-white p-4 rounded shadow border border-gray-200 w-full">
           <h3 className="font-bold text-gray-700 mb-4">💳 Planes</h3>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <div className="sm:col-span-2 h-72 w-full">
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie data={planStats} outerRadius={80} dataKey="value">
-                      {planStats.map((entry, index) => <Cell key={index} fill={getConsistentColor(index + 5)} />)}
-                  </Pie>
-                  <Tooltip />
-                </PieChart>
-              </ResponsiveContainer>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 h-full">
+            <div className="sm:col-span-2 h-72 w-full relative">
+              <Pie data={planChartData} options={hiddenLegendOptions} />
             </div>
             <div className="sm:col-span-1 w-full">
-              <LegendBox data={planStats} title="Planes" />
+              <LegendBox data={planStats} title="Planes" colorOffset={5} />
             </div>
           </div>
         </div>
       </div>
 
       {/* CONSUMO */}
-      <div className="bg-white p-6 rounded shadow border w-full">
+      <div className="bg-white p-6 rounded shadow border border-gray-200 w-full">
         <h3 className="text-xl font-bold text-blue-900 mb-4">📊 Análisis de Consumo</h3>
         
         <div className="flex space-x-4 border-b border-gray-200 mb-4 overflow-x-auto">
           <button 
-            className={`pb-2 px-4 whitespace-nowrap font-medium ${activeTab === 'diario' ? 'border-b-2 border-blue-500 text-blue-600' : 'text-gray-500'}`}
+            className={`pb-2 px-4 whitespace-nowrap font-medium transition-colors ${activeTab === 'diario' ? 'border-b-2 border-blue-500 text-blue-600' : 'text-gray-500 hover:text-blue-500'}`}
             onClick={() => setActiveTab('diario')}
           >
             📅 Diario
           </button>
           <button 
-            className={`pb-2 px-4 whitespace-nowrap font-medium ${activeTab === 'mensual' ? 'border-b-2 border-blue-500 text-blue-600' : 'text-gray-500'}`}
+            className={`pb-2 px-4 whitespace-nowrap font-medium transition-colors ${activeTab === 'mensual' ? 'border-b-2 border-blue-500 text-blue-600' : 'text-gray-500 hover:text-blue-500'}`}
             onClick={() => setActiveTab('mensual')}
           >
             🗓️ Mensual
@@ -240,18 +324,11 @@ const M2MView = () => {
         </div>
 
         <div className="w-full">
-          <div className="bg-blue-50 p-3 rounded text-blue-900 font-bold mb-4 inline-block">
-             Tráfico Total: {(consumptionData.total / 1024).toFixed(2)} GB
+          <div className="bg-blue-50 p-3 rounded text-blue-900 font-bold mb-4 inline-block border border-blue-100">
+             Tráfico Total: {(consumptionTotal / 1024).toFixed(2)} GB
           </div>
-          <div className="h-72 w-full">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={consumptionData.stats} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
-                <XAxis dataKey="name" />
-                <YAxis />
-                <Tooltip cursor={{fill: 'transparent'}} />
-                <Bar dataKey="value" fill="#3b82f6" radius={[4, 4, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
+          <div className="h-72 w-full relative">
+            <Bar data={consumptionChartData} options={barOptions} />
           </div>
         </div>
       </div>
@@ -295,7 +372,7 @@ const M2MView = () => {
         {/* TABLA */}
         <TableCard 
           title="Listado M2M Completo"
-          data={currentItems} // Pasamos solo los items de la página actual
+          data={currentItems} 
           columns={[
             { header: "ICCID", accessor: "icc", render: (r) => <span className="font-mono text-xs text-gray-600">{r.icc}</span> },
             { header: "Estado", accessor: "status_clean", render: (r) => (

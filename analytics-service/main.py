@@ -1,6 +1,6 @@
 # Archivo: main.py
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 import pandas as pd
 import numpy as np
@@ -43,24 +43,37 @@ app.add_middleware(
 def clean_df(df):
     """
     Convierte todo a objetos y elimina NaN.
-    Esta es la solución definitiva para el error 'float values are not JSON compliant'.
     """
     if df.empty:
         return df
     
     df_obj = df.astype(object)
-    
-    df_obj_clean =df_obj.where(pd.notnull(df_obj), None)
-    #print(df_obj_clean)
-    
+    df_obj_clean = df_obj.where(pd.notnull(df_obj), None)
     return df_obj_clean
 
+# --- HELPER PARA PAGINACIÓN ---
+def paginate_df(df: pd.DataFrame, limit: int, offset: int):
+    """
+    Aplica la lógica de limit y offset sobre un DataFrame.
+    """
+    if df.empty:
+        return df
+    
+    # Si el offset es mayor que la cantidad de filas, retornamos vacío
+    if offset >= len(df):
+        return pd.DataFrame(columns=df.columns)
+    
+    # Aplicamos el slicing (corte)
+    return df.iloc[offset : offset + limit]
 
 # ==========================================
 # ENDPOINT 1: DEVICES (Boards)
 # ==========================================
 @app.get("/internal/dashboard/devices")
-def get_devices_dashboard():
+def get_devices_dashboard(
+    limit: int = Query(100, ge=1, description="Cantidad de registros a traer"),
+    offset: int = Query(0, ge=0, description="Desde qué registro empezar")
+):
     raw_devices = client.get_devicesB()
     raw_models = client.get_deviceModels()
     raw_software = client.get_deviceSoftware()
@@ -77,7 +90,10 @@ def get_devices_dashboard():
         
         # Limpieza 
         df_final = clean_df(df_final)
-        df_final = df_final.head(100)
+        
+        # Paginación
+        df_final = paginate_df(df_final, limit, offset)
+        
         return df_final.to_dict(orient="records")
     except Exception as e:
         print(f"❌ Error en Devices: {e}")
@@ -89,7 +105,10 @@ def get_devices_dashboard():
 # ENDPOINT 1.1: DEVICES KIWI
 # ==========================================
 @app.get("/internal/dashboard/kiwi")
-def get_kiwi_dashboard():
+def get_kiwi_dashboard(
+    limit: int = Query(100, ge=1),
+    offset: int = Query(0, ge=0)
+):
     raw_kiwi = client.get_devicesKiwi()
     raw_software = client.get_deviceSoftware()
 
@@ -101,7 +120,10 @@ def get_kiwi_dashboard():
     try:
         df_final = prepare_kiwi(raw_kiwi, df_soft=df_soft)
         df_final = clean_df(df_final)
-        df_final = df_final.head(100)
+        
+        # Paginación
+        df_final = paginate_df(df_final, limit, offset)
+        
         return df_final.to_dict(orient="records")
     except Exception as e:
         print(f"❌ Error en Kiwi: {e}")
@@ -113,12 +135,18 @@ def get_kiwi_dashboard():
 # ENDPOINT 2: INFO
 # ==========================================
 @app.get("/internal/dashboard/info")
-def get_info_dashboard():
+def get_info_dashboard(
+    limit: int = Query(100, ge=1),
+    offset: int = Query(0, ge=0)
+):
     raw_info = client.get_deviceInfo()
     try:
         df_final = process_devicesInfo(raw_info)
         df_final = clean_df(df_final)
-        df_final = df_final.head(100)
+        
+        # Paginación
+        df_final = paginate_df(df_final, limit, offset)
+        
         return df_final.to_dict(orient="records")
     except Exception as e:
         print(f"❌ Error en Info: {e}")
@@ -130,12 +158,18 @@ def get_info_dashboard():
 # ENDPOINT 3: M2M
 # ==========================================
 @app.get("/internal/dashboard/m2m")
-def get_m2m_dashboard():
+def get_m2m_dashboard(
+    limit: int = Query(100, ge=1),
+    offset: int = Query(0, ge=0)
+):
     raw_m2m = client.get_m2m()
     try:
         df_final = process_m2m(raw_m2m)
         df_final = clean_df(df_final)
-        df_final = df_final.head(100)
+        
+        # Paginación
+        df_final = paginate_df(df_final, limit, offset)
+        
         return df_final.to_dict(orient="records")
     except Exception as e:
         print(f"❌ Error en M2M: {e}")

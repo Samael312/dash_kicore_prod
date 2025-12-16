@@ -92,14 +92,23 @@ def process_m2m(json_data):
     # TARIFA
     df['rate_plan'] = df.get('servicePack', pd.Series([None]*len(df))).fillna('Sin Plan')
 
-    # TIPO DE RED
-    df['network_type'] = df.get('ratType', pd.Series([255]*len(df))).fillna(255)
-    df.loc[df['network_type'] == 1, 'network_type'] = '3G'
-    df.loc[df['network_type'] == 2, 'network_type'] = '2G'
-    df.loc[df['network_type'] == 5, 'network_type'] = '3.5G'
-    df.loc[df['network_type'] == 6, 'network_type'] = '4G'
-    df.loc[df['network_type'] == 8, 'network_type'] = 'NB-IoT'
-    df.loc[df['network_type'].isin([255, 'N/A']), 'network_type'] = 'Sin Información'
+    # TIPO DE RED 
+    network_map = {
+        1: '3G',
+        2: '2G',
+        5: '3.5G',
+        6: '4G',
+        8: 'NB-IoT',
+        255: 'Sin Información'
+    }
+
+    df['network_type'] = (
+        df.get('ratType', pd.Series([255] * len(df)))
+          .fillna(255)
+          .astype(int)
+          .map(network_map)
+          .fillna('Sin Información')
+    )
 
     # ORGANIZACIÓN
     df['organization'] = df.get('customField1', pd.Series(["N/A"]*len(df))).astype(str)

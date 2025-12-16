@@ -11,6 +11,7 @@ from app.api_client import CoreClient
 from app.logic.data_device import prepare_boards, prepare_kiwi
 from app.logic.data_info import process_devicesInfo
 from app.logic.data_m2m import process_m2m
+from app.logic.data_pool import process_pools
 
 # Instancia global del cliente
 client = CoreClient()
@@ -76,13 +77,14 @@ def get_devices_dashboard(
 ):
     raw_devices = client.get_devicesB()
     raw_models = client.get_deviceModels()
-    raw_software = client.get_deviceSoftware()
+    raw_software = client.get_deviceSoftware()  
 
     if not raw_devices:
         return []
 
     df_models = pd.DataFrame(raw_models)
     df_soft = pd.DataFrame(raw_software)
+    
 
     try:
         # Lógica de negocio
@@ -173,6 +175,33 @@ def get_m2m_dashboard(
         return df_final.to_dict(orient="records")
     except Exception as e:
         print(f"❌ Error en M2M: {e}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+# ==========================================
+# ENDPOINT 4: POOLS
+# ==========================================
+@app.get("/internal/dashboard/pools")
+def get_pools_dashboard(
+    limit: int = Query(100, ge=1),
+    offset: int = Query(0, ge=0)
+):
+    raw_pool = client.get_pools()
+    try:
+        # PROCESAMIENTO NUEVO
+        df_pool = process_pools(raw_pool)
+        
+        # Limpieza final para JSON (NaN -> None)
+        df_pool = clean_df(df_pool)
+        
+        # Paginación (Opcional: Si quieres ver TODOS los pools para sumar gráficas, 
+        # considera aumentar el limit o quitar la paginación en frontend)
+        df_pool_paginated = paginate_df(df_pool, limit, offset)
+        
+        return df_pool_paginated.to_dict(orient="records")
+    except Exception as e:
+        print(f"❌ Error en Pools: {e}")
         import traceback
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))

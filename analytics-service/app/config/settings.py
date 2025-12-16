@@ -15,6 +15,7 @@ class Settings:
 
     # ENDPOINTS
     URL_LOGIN = f"{BASE_URL}/users/sign-in"
+    URL_POOL = f"{BASE_URL}/pools"
     URL_DEVICES = f"{BASE_URL}/boards"
     URL_DEVICES2 = f"{BASE_URL}/kiwi"
     URL_MODEL_B = f"{BASE_URL}/models"

@@ -20,7 +20,6 @@ class CoreClient:
             if data.get("login") is True:
                 self.token = data.get("apiToken")
                 self.headers = {'Authorization': f"Basic {self.token}"}
-                print(f"TOKEN: {self.headers}")
                 print("Login exitoso.")
                 return self.token
             return None
@@ -30,6 +29,9 @@ class CoreClient:
 
     def get_m2m(self):
         return self._get_data(Settings.URL_M2M, "resources/m2m.xlsx", params={"tenant_uuid": Settings.DEFAULT_TENANT_UUID})
+    
+    def get_pools(self):
+        return self._get_data(Settings.URL_POOL, "resources/pool.xlsx")
 
     def get_devicesB(self):
         return self._get_data(Settings.URL_DEVICES, "resources/boards.xlsx")
@@ -46,7 +48,7 @@ class CoreClient:
     def get_deviceSoftware(self):
         return self._get_data(Settings.URL_MODEL_K, "resources/software.xlsx")
 
-    # VERIFICACION DE DATOS
+    # --- VERIFICACION Y OBTENCIÓN DE DATOS MEJORADA ---
     def _get_data(self, url, filename="resources/output.xlsx", params=None):
         if not self.token:
             print("No hay token de sesión. Intentando relogin...")
@@ -55,40 +57,55 @@ class CoreClient:
                 return []
 
         try:
+            print(f"Fetching: {url}")
             resp = requests.get(url, headers=self.headers, params=params)
             resp.raise_for_status() 
 
             data = resp.json()
             list_data = []
 
-            if isinstance(data, dict):
-                list_data = None
-                for k, v in data.items():
-                    if isinstance(v, list) and len(v) > 0 and isinstance(v[0], dict):
-                        list_data = v
-                        break
-                if list_data is None:
-                    list_data = []
-            elif isinstance(data, list):
+            # 1. Si es lista directa
+            if isinstance(data, list):
                 list_data = data
-            else:
-                list_data = []
-            if list_data: 
-                self._export_columns_to_excel(list_data, filename)
+            
+            # 2. Si es diccionario, buscamos la lista dentro
+            elif isinstance(data, dict):
+                # A. Busqueda por claves estándar
+                if "content" in data and isinstance(data["content"], list):
+                    list_data = data["content"]
+                elif "data" in data and isinstance(data["data"], list):
+                    list_data = data["data"]
+                # B. Busqueda heurística (la primera lista que encuentre)
+                else:
+                    for k, v in data.items():
+                        if isinstance(v, list):
+                            list_data = v
+                            break # Tomamos la primera lista que encontramos
+            
+            # 3. SIEMPRE intentamos exportar, aunque esté vacío (para debug)
+            print(f"Datos recibidos para {filename}: {len(list_data)} registros.")
+            self._export_columns_to_excel(list_data, filename)
             
             return list_data
         
         except Exception as e:
-            print(f"ERROR en {filename}: {e}")
+            print(f"ERROR CRÍTICO en {filename}: {e}")
             return []
 
     def _export_columns_to_excel(self, data, filename="resources/output.xlsx"):
-        os.makedirs(os.path.dirname(filename), exist_ok=True)
-        
-        if not data:
-            return
         try:
+            os.makedirs(os.path.dirname(filename), exist_ok=True)
+            
+            # Convertimos a DataFrame
             df = pd.DataFrame(data)
+            
+            # Si está vacío, creamos un DataFrame vacío pero lo guardamos igual
+            if df.empty:
+                print(f"⚠️ Aviso: Dataset vacío para {filename}. Se genera Excel vacío.")
+                df = pd.DataFrame(columns=["Info"]) # Columna dummy para que Excel no se queje
+            
             df.to_excel(filename, index=False)
+            #print(f"💾 Excel guardado: {filename}")
+            
         except Exception as e:
-            print(f"Error exportando a Excel: {e}")
+            print(f"Error exportando a Excel {filename}: {e}")

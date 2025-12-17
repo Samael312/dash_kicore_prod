@@ -340,11 +340,20 @@ const DevicesView = () => {
             { header: "Nombre", accessor: "name", render: (r) => <span className="font-semibold text-gray-700">{r.name || '-'}</span> },
             { header: "Modelo", accessor: "model" },
             { header: "Organización", accessor: "organization" },
-            { header: "Estado", accessor: "status_clean", render: (row) => (
+            { header: "Estado Dispositivo", accessor: "status_clean", render: (row) => (
                <span className={`px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wide ${row.status_clean === 'Conectado' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
                  {row.status_clean}
                </span>
             )},
+            { header: "Orden ID", accessor: "order_id_ren", render: (r) => <span className="font-semibold text-gray-700">{r.order_id_ren || '-'}</span> },
+            { header: "Fecha Renovación", accessor: "date_to_renew" },
+            { header: "Subscripción", accessor: "ki_subscription" },
+            { header: "Estado Subscripción", accessor: "state", render: (row) => (
+               <span className={`px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wide ${row.state === 'active' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                 {row.status_clean}
+               </span>
+            )},
+
           ]}
           loading={loading}
           page={currentPage} 

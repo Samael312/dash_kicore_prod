@@ -46,7 +46,20 @@ class CoreClient:
         return self._get_data(Settings.URL_MODEL_B, "resources/models.xlsx")
         
     def get_deviceSoftware(self):
-        return self._get_data(Settings.URL_MODEL_K, "resources/software.xlsx")
+        return self._get_data(Settings.URL_VERSION_K, "resources/software.xlsx")
+    
+    def get_deviceRenewals(self, show_all=False):
+        # 1. Configurar params
+        params = {}
+        if show_all:
+
+            params['showAll'] = 'true' 
+            
+        return self._get_data(
+            Settings.URL_REN,           # La URL viene de settings
+            "resources/renewals.xlsx",  # Nombre para el excel de debug
+            params=params               # Pasamos el parámetro ShowAll
+        )
 
     # --- VERIFICACION Y OBTENCIÓN DE DATOS MEJORADA ---
     def _get_data(self, url, filename="resources/output.xlsx", params=None):

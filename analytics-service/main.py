@@ -60,11 +60,9 @@ def paginate_df(df: pd.DataFrame, limit: int, offset: int):
     if df.empty:
         return df
     
-    # Si el offset es mayor que la cantidad de filas, retornamos vacío
     if offset >= len(df):
         return pd.DataFrame(columns=df.columns)
     
-    # Aplicamos el slicing (corte)
     return df.iloc[offset : offset + limit]
 
 # ==========================================
@@ -77,18 +75,19 @@ def get_devices_dashboard(
 ):
     raw_devices = client.get_devicesB()
     raw_models = client.get_deviceModels()
-    raw_software = client.get_deviceSoftware()  
+    raw_software = client.get_deviceSoftware()
+    raw_ren = client.get_deviceRenewals()
 
     if not raw_devices:
         return []
 
     df_models = pd.DataFrame(raw_models)
     df_soft = pd.DataFrame(raw_software)
+    df_ren = pd.DataFrame(raw_ren)
     
-
     try:
-        # Lógica de negocio
-        df_final = prepare_boards(raw_devices, df_models=df_models, df_soft=df_soft)
+        # Lógica de negocio - Ahora prepare_boards acepta df_ren correctamente
+        df_final = prepare_boards(raw_devices, df_models=df_models, df_soft=df_soft, df_ren=df_ren)
         
         # Limpieza 
         df_final = clean_df(df_final)
@@ -113,14 +112,17 @@ def get_kiwi_dashboard(
 ):
     raw_kiwi = client.get_devicesKiwi()
     raw_software = client.get_deviceSoftware()
-
+    raw_ren = client.get_deviceRenewals()
+    
     if not raw_kiwi:
         return []
 
     df_soft = pd.DataFrame(raw_software)
+    df_ren = pd.DataFrame(raw_ren)
 
     try:
-        df_final = prepare_kiwi(raw_kiwi, df_soft=df_soft)
+        # Pasamos df_ren aunque no se use intensivamente, para mantener consistencia
+        df_final = prepare_kiwi(raw_kiwi, df_soft=df_soft, df_ren=df_ren)
         df_final = clean_df(df_final)
         
         # Paginación
@@ -146,7 +148,6 @@ def get_info_dashboard(
         df_final = process_devicesInfo(raw_info)
         df_final = clean_df(df_final)
         
-        # Paginación
         df_final = paginate_df(df_final, limit, offset)
         
         return df_final.to_dict(orient="records")
@@ -169,7 +170,6 @@ def get_m2m_dashboard(
         df_final = process_m2m(raw_m2m)
         df_final = clean_df(df_final)
         
-        # Paginación
         df_final = paginate_df(df_final, limit, offset)
         
         return df_final.to_dict(orient="records")
@@ -189,19 +189,38 @@ def get_pools_dashboard(
 ):
     raw_pool = client.get_pools()
     try:
-        # PROCESAMIENTO NUEVO
         df_pool = process_pools(raw_pool)
-        
-        # Limpieza final para JSON (NaN -> None)
         df_pool = clean_df(df_pool)
         
-        # Paginación (Opcional: Si quieres ver TODOS los pools para sumar gráficas, 
-        # considera aumentar el limit o quitar la paginación en frontend)
         df_pool_paginated = paginate_df(df_pool, limit, offset)
         
         return df_pool_paginated.to_dict(orient="records")
     except Exception as e:
         print(f"❌ Error en Pools: {e}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+# ==========================================
+# ENDPOINT 5: RENEWALS
+# ==========================================
+@app.get("/internal/dashboard/renewals")
+def get_renewals_dashboard(
+    limit: int = Query(100, ge=1),
+    offset: int = Query(0, ge=0),
+    show_all: bool = Query(True)
+):
+    raw_ren = client.get_deviceRenewals(show_all= 'true')
+    try:
+        df_ren = pd.DataFrame(raw_ren)
+        df_ren = clean_df(df_ren)
+        
+        df_ren_paginated = paginate_df(df_ren, limit, offset)
+        
+        return df_ren_paginated.to_dict(orient="records")
+    except Exception as e:
+        # CORRECCIÓN: Mensaje de error correcto
+        print(f"❌ Error en Renewals: {e}")
         import traceback
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))

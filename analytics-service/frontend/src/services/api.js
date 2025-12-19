@@ -22,4 +22,5 @@ export const api = {
   getKiwi: (page, limit) => fetchEndpoint('kiwi', page, limit),
   getInfo: (page, limit) => fetchEndpoint('info', page, limit),
   getM2M: (page, limit) => fetchEndpoint('m2m', page, limit),
+  getRenewals: (page, limit) => fetchEndpoint('renewals', page, limit)
 };

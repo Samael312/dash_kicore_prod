@@ -3,7 +3,7 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Cell 
 } from 'recharts';
 import { 
-  Layers, Activity, Search, Filter, ChevronLeft, ChevronRight 
+  Layers, Activity, Search, Filter, ChevronLeft, ChevronRight, Loader2
 } from 'lucide-react';
 
 // --- AGREGADO: Imports para Chart.js (Gráfica de línea histórica) ---
@@ -193,7 +193,15 @@ const PoolView = () => {
     percent: item.usage_percent
   })).sort((a,b) => b.Consumo - a.Consumo).slice(0, 20); 
 
-  if (loading) return <div className="p-10 text-center text-gray-500">Cargando datos de Pools...</div>;
+    // --- RENDERIZADO ---
+   if (loading) {
+     return (
+       <div className="flex flex-col items-center justify-center h-screen bg-gray-50 text-gray-500">
+         <Loader2 className="animate-spin mb-2" size={48} />
+         <p>Cargando datos...</p>
+       </div>
+     );
+   }
 
   return (
     <div className="space-y-6 p-6 bg-gray-50 min-h-screen font-sans">
@@ -247,7 +255,7 @@ const PoolView = () => {
       </div>
 
       {/* 3. GRÁFICA DE CONSUMO VS LIMITE */}
-      <div className="bg-white p-6 rounded-lg shadow-sm h-[800px]">
+      <div className="bg-white p-6 rounded-lg shadow-sm h-[500px]">
         <h3 className="text-lg font-bold text-gray-700 mb-4">Consumo vs Límite (Top Pools - GB)</h3>
         <ResponsiveContainer width="100%" height="100%">
           <BarChart

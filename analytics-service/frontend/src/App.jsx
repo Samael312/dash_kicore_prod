@@ -8,7 +8,8 @@ import {
   Layers, 
   Radio,
   FileCode,
-  Info
+  Info,
+  Library
 } from 'lucide-react';
 
 // IMPORTACIONES DE TUS VISTAS
@@ -17,6 +18,7 @@ import DevicesView from './views/DevicesView';
 import KiwiView from './views/KiwiView';
 import InfoView from './views/InfoView';
 import PoolView from './views/PoolView';
+import RenView from './views/RenView';
 
 // ==========================================
 // COMPONENTE PRINCIPAL APP
@@ -42,7 +44,8 @@ const App = () => {
       case 'pool': return <PoolView />;
       case 'boards': return <DevicesView />;
       case 'kiwi': return <KiwiView />;
-      case 'versions': return <InfoView />; // Reusamos InfoView para Versiones
+      case 'versions': return <InfoView />; 
+      case 'ren': return <RenView />
       default: return <M2MView />;
     }
   };
@@ -62,6 +65,7 @@ const App = () => {
       items: [
         { label: 'Boards', id: 'boards', icon: <Server size={16} /> },
         { label: 'Kiwi', id: 'kiwi', icon: <LayoutDashboard size={16} /> },
+        { label: 'Renovaciones', id: 'ren', icon: <Library size={16} /> },
       ]
     },
     {

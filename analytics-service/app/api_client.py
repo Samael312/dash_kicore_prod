@@ -48,7 +48,7 @@ class CoreClient:
     def get_deviceSoftware(self):
         return self._get_data(Settings.URL_VERSION_K, "resources/software.xlsx")
     
-    def get_deviceRenewals(self, show_all=False):
+    def get_deviceRenewals(self, show_all=True):
         # 1. Configurar params
         params = {}
         if show_all:

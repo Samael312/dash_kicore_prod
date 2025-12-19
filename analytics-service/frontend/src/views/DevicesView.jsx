@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { api } from '../services/api';
 import TableCard from '../components/TableCard';
 import { getConsistentColor } from '../utils/colors';
-import { Search, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Search, ChevronLeft, ChevronRight, Loader2 } from 'lucide-react';
 
 // --- CHART.JS IMPORTS ---
 import {
@@ -191,6 +191,7 @@ const DevicesView = () => {
   const uniqueModels = [...new Set(rawData.map(d => d.model))].sort();
   const uniqueOrgs = [...new Set(rawData.map(d => d.organization))].sort();
 
+ 
   // --- LEYENDA (Sidebar) ---
   const renderLegend = (data, title) => (
     <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 h-full w-full overflow-hidden flex flex-col">
@@ -206,6 +207,16 @@ const DevicesView = () => {
       </div>
     </div>
   );
+
+   // --- RENDERIZADO ---
+  if (loading) {
+    return (
+      <div className="flex flex-col items-center justify-center h-screen bg-gray-50 text-gray-500">
+        <Loader2 className="animate-spin mb-2" size={48} />
+        <p>Cargando datos...</p>
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col gap-6 w-full max-w-none animate-fade-in pb-10">
@@ -344,15 +355,8 @@ const DevicesView = () => {
                <span className={`px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wide ${row.status_clean === 'Conectado' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
                  {row.status_clean}
                </span>
-            )},
-            { header: "Orden ID", accessor: "order_id_ren", render: (r) => <span className="font-semibold text-gray-700">{r.order_id_ren || '-'}</span> },
-            { header: "Fecha Renovación", accessor: "date_to_renew" },
-            { header: "Subscripción", accessor: "ki_subscription" },
-            { header: "Estado Subscripción", accessor: "state", render: (row) => (
-               <span className={`px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wide ${row.state === 'active' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
-                 {row.status_clean}
-               </span>
-            )},
+            )}
+
 
           ]}
           loading={loading}

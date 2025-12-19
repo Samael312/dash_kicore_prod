@@ -1,35 +1,35 @@
-# Archivo: app/logic/data_device.py
 import pandas as pd
 import numpy as np
 
-def _merge_model_info(df_devices, df_software, df_models, df_ren):
+def _clean_uuid(series):
+    """Ayuda a limpiar UUIDs para asegurar el cruce (lowercase + strip)"""
+    if series.empty:
+        return series
+    return series.astype(str).str.strip().str.lower()
+
+def _merge_model_info(df_devices, df_software, df_models):
     """
-    Función auxiliar para cruzar Dispositivos -> Software -> Modelos -> Renovaciones
+    Función auxiliar para cruzar Dispositivos -> Software -> Modelos
+    (Sin renovaciones)
     """
     if df_devices.empty:
         return df_devices
 
-    # 1. Asegurar que las columnas clave sean string para evitar errores de merge
+    # 1. Asegurar limpieza de IDs
     if 'version_uuid' in df_devices.columns:
-        df_devices['version_uuid'] = df_devices['version_uuid'].astype(str)
+        df_devices['version_uuid'] = _clean_uuid(df_devices['version_uuid'])
     
     if not df_software.empty:
         if 'uuid' in df_software.columns:
-            df_software['uuid'] = df_software['uuid'].astype(str)
+            df_software['uuid'] = _clean_uuid(df_software['uuid'])
         if 'model_uuid' in df_software.columns:
-            df_software['model_uuid'] = df_software['model_uuid'].astype(str)
+            df_software['model_uuid'] = _clean_uuid(df_software['model_uuid'])
     
     if not df_models.empty:
         if 'uuid' in df_models.columns:
-            df_models['uuid'] = df_models['uuid'].astype(str)
+            df_models['uuid'] = _clean_uuid(df_models['uuid'])
     
-    # --- CORRECCIÓN AQUÍ: Antes modificabas df_models en lugar de df_ren ---
-    if not df_ren.empty:
-        if 'uuid' in df_ren.columns:
-            df_ren['uuid'] = df_ren['uuid'].astype(str)
-
     # 2. Merge: Dispositivos + Software (por version_uuid)
-    # Usamos try/except o verificamos columnas para evitar KeyError si df_software viene vacío pero con columnas raras
     if not df_software.empty and 'uuid' in df_software.columns:
         df_merged = df_devices.merge(
             df_software[['uuid', 'model_uuid']], 
@@ -43,8 +43,12 @@ def _merge_model_info(df_devices, df_software, df_models, df_ren):
         df_merged['model_uuid'] = None
 
     # 3. Merge: Resultado + Modelos (por model_uuid)
+    # Limpiamos model_uuid en el merged por si acaso
+    if 'model_uuid' in df_merged.columns:
+        df_merged['model_uuid'] = _clean_uuid(df_merged['model_uuid'])
+
     if not df_models.empty and 'uuid' in df_models.columns and 'model_uuid' in df_merged.columns:
-        df_merge2 = df_merged.merge(
+        df_final = df_merged.merge(
             df_models[['uuid', 'name']], 
             left_on='model_uuid', 
             right_on='uuid', 
@@ -52,27 +56,10 @@ def _merge_model_info(df_devices, df_software, df_models, df_ren):
             suffixes=('', '_model_real')
         )
     else:
-        df_merge2 = df_merged.copy()
-        df_merge2['name_model_real'] = None
+        df_final = df_merged.copy()
+        df_final['name_model_real'] = None
 
-    if not df_ren.empty and 'uuid' in df_ren.columns:
-        
-        desired_columns = ['uuid', 'order_id', 'date_to_renew', 'renewal_diff', 'ki_subscription', 'state'] 
-
-        valid_columns = [col for col in desired_columns if col in df_ren.columns]
-        
-        df_final = df_merge2.merge(
-            df_ren[valid_columns],  # Seleccionamos las columnas validadas
-            on='uuid',              # Cruzamos por uuid
-            how='left',
-            suffixes=('', '_ren')   # Si hay columnas repetidas, añade '_ren' al final
-        )
-    else:
-        df_final = df_merge2.copy()
-
-        print(df_final)
-
-    # 5. Consolidar el nombre del modelo
+    # 4. Consolidar el nombre del modelo
     if 'name_model_real' in df_final.columns:
         df_final['real_model_name'] = df_final['name_model_real'].fillna('Desconocido')
     else:
@@ -88,10 +75,9 @@ def _get_enabled_label(val):
     s = str(val).lower()
     return "Habilitado" if s in ["terminado", "asignado", "fabricado", "true", "enabled"] else "Deshabilitado"
 
-# --- CORRECCIÓN: Agregado df_ren=None a la firma ---
-def prepare_boards(data, df_models=None, df_soft=None, df_ren=None):
+def prepare_boards(data, df_models=None, df_soft=None):
     """
-    Prepara Boards. 
+    Prepara Boards (Sin lógica de renovaciones). 
     """
     if isinstance(data, list):
         df = pd.DataFrame(data)
@@ -106,13 +92,10 @@ def prepare_boards(data, df_models=None, df_soft=None, df_ren=None):
     # Aseguramos dataframes vacíos si vienen None
     df_models = df_models if df_models is not None else pd.DataFrame()
     df_soft = df_soft if df_soft is not None else pd.DataFrame()
-    df_ren = df_ren if df_ren is not None else pd.DataFrame()
 
     # --- LÓGICA DE CRUCE DE MODELOS ---
-    # Permitimos el merge aunque falte alguno, el helper _merge_model_info gestiona los vacíos
     try:
-        # --- CORRECCIÓN: Se pasa df_ren correctamente ---
-        df = _merge_model_info(df, df_soft, df_models, df_ren)
+        df = _merge_model_info(df, df_soft, df_models)
         df["model"] = df["real_model_name"]
     except Exception as e:
         print(f"⚠️ Error merging models: {e}")
@@ -129,17 +112,6 @@ def prepare_boards(data, df_models=None, df_soft=None, df_ren=None):
     df["status_clean"] = df[col_state].apply(_get_status_label) if col_state in df.columns else "Desconectado"
     df["enabled_clean"] = df[col_state].apply(_get_enabled_label) if col_state in df.columns else "Deshabilitado"
 
-    # =========================================================================
-    # EXPORTAR A EXCEL
-    # =========================================================================
-    try:
-        # Nombre del archivo (se sobrescribirá cada vez que ejecutes)
-        filename = "export_boards.xlsx"
-        df.to_excel(filename, index=False)
-        print(f"✅ Archivo exportado exitosamente: {filename}")
-    except Exception as e:
-        print(f"❌ No se pudo exportar el Excel (verifique permisos o instalación de openpyxl): {e}")
-
     # Conversión final para evitar NaN en JSON
     df = df.astype(object)
     df = df.where(pd.notnull(df), None)
@@ -149,8 +121,7 @@ def prepare_boards(data, df_models=None, df_soft=None, df_ren=None):
 # -------------------------------------------------------------------------
 # KIWI
 # -------------------------------------------------------------------------
-# --- CORRECCIÓN: Agregado df_ren=None y df_models=None por consistencia ---
-def prepare_kiwi(data, df_models=None, df_soft=None, df_ren=None):
+def prepare_kiwi(data, df_models=None, df_soft=None):
     if isinstance(data, list):
         df = pd.DataFrame(data)
     elif isinstance(data, pd.DataFrame):
@@ -168,11 +139,11 @@ def prepare_kiwi(data, df_models=None, df_soft=None, df_ren=None):
     if not df_soft.empty and 'version_uuid' in df.columns:
         try:
             # 1. Limpieza de IDs
-            df['version_uuid'] = df['version_uuid'].astype(str).str.strip().str.lower()
+            df['version_uuid'] = _clean_uuid(df['version_uuid'])
             
             df_soft_clean = df_soft.copy()
             if 'uuid' in df_soft_clean.columns:
-                df_soft_clean['uuid'] = df_soft_clean['uuid'].astype(str).str.strip().str.lower()
+                df_soft_clean['uuid'] = _clean_uuid(df_soft_clean['uuid'])
             
             # 2. Preparamos el DataFrame de Software
             df_soft_ready = df_soft_clean[['uuid', 'name']].rename(columns={'name': 'software_name'})
@@ -206,17 +177,6 @@ def prepare_kiwi(data, df_models=None, df_soft=None, df_ren=None):
     df["status_clean"] = df[col_state].apply(_get_status_label) if col_state in df.columns else "Desconectado"
     df["enabled_clean"] = df[col_state].apply(_get_enabled_label) if col_state in df.columns else "Deshabilitado"
 
-    # =========================================================================
-    # EXPORTAR A EXCEL
-    # =========================================================================
-    try:
-        # Nombre del archivo (se sobrescribirá cada vez que ejecutes)
-        filename = "export_boards.xlsx"
-        df.to_excel(filename, index=False)
-        print(f"✅ Archivo exportado exitosamente: {filename}")
-    except Exception as e:
-        print(f"❌ No se pudo exportar el Excel (verifique permisos o instalación de openpyxl): {e}")
-        
     df = df.astype(object)
     df = df.where(pd.notnull(df), None)
 

@@ -12,6 +12,7 @@ from app.logic.data_device import prepare_boards, prepare_kiwi
 from app.logic.data_info import process_devicesInfo
 from app.logic.data_m2m import process_m2m
 from app.logic.data_pool import process_pools
+from app.logic.data_renewal import process_renewals_logic
 
 # Instancia global del cliente
 client = CoreClient()
@@ -70,24 +71,22 @@ def paginate_df(df: pd.DataFrame, limit: int, offset: int):
 # ==========================================
 @app.get("/internal/dashboard/devices")
 def get_devices_dashboard(
-    limit: int = Query(100, ge=1, description="Cantidad de registros a traer"),
+    limit: int = Query(10000, ge=1, description="Cantidad de registros a traer"),
     offset: int = Query(0, ge=0, description="Desde qué registro empezar")
 ):
     raw_devices = client.get_devicesB()
     raw_models = client.get_deviceModels()
     raw_software = client.get_deviceSoftware()
-    raw_ren = client.get_deviceRenewals()
 
     if not raw_devices:
         return []
 
     df_models = pd.DataFrame(raw_models)
     df_soft = pd.DataFrame(raw_software)
-    df_ren = pd.DataFrame(raw_ren)
-    
+
     try:
-        # Lógica de negocio - Ahora prepare_boards acepta df_ren correctamente
-        df_final = prepare_boards(raw_devices, df_models=df_models, df_soft=df_soft, df_ren=df_ren)
+        # Lógica de negocio
+        df_final = prepare_boards(raw_devices, df_models=df_models, df_soft=df_soft)
         
         # Limpieza 
         df_final = clean_df(df_final)
@@ -107,22 +106,19 @@ def get_devices_dashboard(
 # ==========================================
 @app.get("/internal/dashboard/kiwi")
 def get_kiwi_dashboard(
-    limit: int = Query(100, ge=1),
+    limit: int = Query(10000, ge=1),
     offset: int = Query(0, ge=0)
 ):
     raw_kiwi = client.get_devicesKiwi()
     raw_software = client.get_deviceSoftware()
-    raw_ren = client.get_deviceRenewals()
     
     if not raw_kiwi:
         return []
 
     df_soft = pd.DataFrame(raw_software)
-    df_ren = pd.DataFrame(raw_ren)
 
     try:
-        # Pasamos df_ren aunque no se use intensivamente, para mantener consistencia
-        df_final = prepare_kiwi(raw_kiwi, df_soft=df_soft, df_ren=df_ren)
+        df_final = prepare_kiwi(raw_kiwi, df_soft=df_soft)
         df_final = clean_df(df_final)
         
         # Paginación
@@ -140,7 +136,7 @@ def get_kiwi_dashboard(
 # ==========================================
 @app.get("/internal/dashboard/info")
 def get_info_dashboard(
-    limit: int = Query(100, ge=1),
+    limit: int = Query(10000, ge=1),
     offset: int = Query(0, ge=0)
 ):
     raw_info = client.get_deviceInfo()
@@ -162,7 +158,7 @@ def get_info_dashboard(
 # ==========================================
 @app.get("/internal/dashboard/m2m")
 def get_m2m_dashboard(
-    limit: int = Query(100, ge=1),
+    limit: int = Query(10000, ge=1),
     offset: int = Query(0, ge=0)
 ):
     raw_m2m = client.get_m2m()
@@ -184,7 +180,7 @@ def get_m2m_dashboard(
 # ==========================================
 @app.get("/internal/dashboard/pools")
 def get_pools_dashboard(
-    limit: int = Query(100, ge=1),
+    limit: int = Query(10000, ge=1),
     offset: int = Query(0, ge=0)
 ):
     raw_pool = client.get_pools()
@@ -206,20 +202,39 @@ def get_pools_dashboard(
 # ==========================================
 @app.get("/internal/dashboard/renewals")
 def get_renewals_dashboard(
-    limit: int = Query(100, ge=1),
+    limit: int = Query(10000, ge=1),
     offset: int = Query(0, ge=0),
     show_all: bool = Query(True)
 ):
-    raw_ren = client.get_deviceRenewals(show_all= 'true')
+    # A. Obtenemos datos crudos
+    raw_ren = client.get_deviceRenewals(show_all=show_all)
+    raw_devices = client.get_devicesB()
+    raw_models = client.get_deviceModels()
+    # -----------------------------------------------------------------
+    # CORRECCIÓN: Agregamos raw_software para el cruce device->model
+    # -----------------------------------------------------------------
+    raw_software = client.get_deviceSoftware() 
+
     try:
-        df_ren = pd.DataFrame(raw_ren)
-        df_ren = clean_df(df_ren)
+        # C. Procesamos con la nueva lógica (incluyendo software)
+        renewals_data = process_renewals_logic(
+            raw_ren, 
+            raw_devices, 
+            raw_models, 
+            raw_software # <--- Nuevo argumento
+        )
         
-        df_ren_paginated = paginate_df(df_ren, limit, offset)
+        # D. Paginación manual sobre la lista resultante
+        total_items = len(renewals_data)
+        if offset >= total_items:
+             paginated_data = []
+        else:
+             end = offset + limit
+             paginated_data = renewals_data[offset:end]
         
-        return df_ren_paginated.to_dict(orient="records")
+        return paginated_data
+
     except Exception as e:
-        # CORRECCIÓN: Mensaje de error correcto
         print(f"❌ Error en Renewals: {e}")
         import traceback
         traceback.print_exc()

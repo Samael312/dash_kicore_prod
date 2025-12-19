@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { api } from '../services/api';
 import TableCard from '../components/TableCard';
 import { getConsistentColor, COLORS } from '../utils/colors';
-import { Search, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Search, ChevronLeft, ChevronRight, Loader2 } from 'lucide-react';
 
 // --- CHART.JS IMPORTS ---
 import {
@@ -221,6 +221,16 @@ const M2MView = () => {
       ))}
     </div>
   );
+
+  // --- RENDERIZADO ---
+   if (loading) {
+     return (
+       <div className="flex flex-col items-center justify-center h-screen bg-gray-50 text-gray-500">
+         <Loader2 className="animate-spin mb-2" size={48} />
+         <p>Cargando datos...</p>
+       </div>
+     );
+   }
 
   return (
     <div className="space-y-6 w-full min-w-0 p-1 animate-fade-in pb-10">

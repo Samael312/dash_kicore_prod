@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { api } from '../services/api'; 
 import { 
-  AlertCircle, CheckCircle, Clock, Server, Loader2, Calendar, 
-  MousePointerClick, ChevronRight, ChevronLeft, ChevronDown, 
+  AlertCircle, CheckCircle, Clock, Server, Loader2, Calendar, Filter, ArrowUp,
+  ArrowDown, X, Check, MousePointerClick, ChevronRight, ChevronLeft, ChevronDown, 
   Monitor, Search, FileSpreadsheet 
 } from 'lucide-react';
 

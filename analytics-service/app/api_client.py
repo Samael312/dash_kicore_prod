@@ -47,13 +47,15 @@ class CoreClient:
         
     def get_deviceSoftware(self):
         return self._get_data(Settings.URL_VERSION_K, "resources/software.xlsx")
-    
-    def get_deviceRenewals(self, show_all=True):
+
+    def get_deviceRenewals(self, show_all=True, from_date=None, to=None  ):
         # 1. Configurar params
         params = {}
         if show_all:
 
-            params['showAll'] = 'true' 
+            params['showAll'] = 'true'
+            params['from'] = '2020-01-01'
+            params['to'] = '2035-01-01'
             
         return self._get_data(
             Settings.URL_REN,           # La URL viene de settings

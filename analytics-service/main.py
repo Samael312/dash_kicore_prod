@@ -204,10 +204,12 @@ def get_pools_dashboard(
 def get_renewals_dashboard(
     limit: int = Query(10000, ge=1),
     offset: int = Query(0, ge=0),
-    show_all: bool = Query(True)
+    show_all: bool = Query(True),
+    from_date: str = Query(None),
+    to: str = Query(None) 
 ):
     # A. Obtenemos datos crudos
-    raw_ren = client.get_deviceRenewals(show_all=show_all)
+    raw_ren = client.get_deviceRenewals(show_all=show_all, from_date=from_date, to=to)
     raw_devices = client.get_devicesB()
     raw_models = client.get_deviceModels()
     # -----------------------------------------------------------------

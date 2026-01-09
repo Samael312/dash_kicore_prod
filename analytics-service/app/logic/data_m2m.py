@@ -161,6 +161,8 @@ def process_m2m(json_data):
         'organization',
         'country_code',
         'alarm_count',
+        'cons_daily',
+        'cons_month',
         'cons_daily_mb', 
         'cons_month_mb',
         'usage_tier_daily',

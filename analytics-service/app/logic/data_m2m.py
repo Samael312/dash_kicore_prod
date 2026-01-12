@@ -117,7 +117,7 @@ def process_m2m(json_data):
     df['organization'] = df.get('customField1', pd.Series(["N/A"]*len(df))).fillna("N/A").astype(str)
 
     # 5. ICCID (Identificador único SIM)
-    df['iccid'] = df.get('icc', pd.Series(["N/A"]*len(df))).fillna("N/A").astype(str)
+    df['icc'] = df.get('icc', pd.Series(["N/A"]*len(df))).fillna("N/A").astype(str)
 
     # 6. PROCESAMIENTO DE CONSUMO (JSON anidado)
     col_daily = df.get('consumptionDaily', pd.Series([None]*len(df)))
@@ -154,7 +154,7 @@ def process_m2m(json_data):
     # LIMPIEZA FINAL
     # ================================
     cols_to_keep = [
-        'iccid', 
+        'icc', 
         'status_clean', 
         'rate_plan', 
         'network_type', 

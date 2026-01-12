@@ -2,6 +2,7 @@ import React, { useEffect, useState, useMemo } from 'react';
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Cell 
 } from 'recharts';
+import { api } from '../services/api';
 import { 
   Layers, Activity, Search, Filter, ChevronLeft, ChevronRight, Loader2
 } from 'lucide-react';
@@ -37,37 +38,20 @@ const PoolView = () => {
   const [timeRange, setTimeRange] = useState('semanal');
   const [historyData, setHistoryData] = useState({ labels: [], datasets: [] });
 
-  // FETCH DE DATOS (Simulado si no hay backend, o tu fetch real)
+  // --- FETCH DE DATOS ---
   useEffect(() => {
-    // NOTA: Si no tienes el backend corriendo, descomenta esto para probar con datos falsos:
-    /*
-    const mockData = Array.from({ length: 50 }).map((_, i) => ({
-       pool_id: `POOL-${1000 + i}`,
-       commercialGroup: i % 2 === 0 ? 'Empresa A' : 'Empresa B',
-       sims_active: Math.floor(Math.random() * 50),
-       sims_total: 50,
-       bytes_consumed: Math.random() * 5000000000,
-       bytes_limit: 10000000000,
-       usage_percent: Math.floor(Math.random() * 100)
-    }));
-    setData(mockData);
-    setLoading(false);
-    return; 
-    */
-
-    fetch('http://localhost:8000/internal/dashboard/pools?limit=1000') 
-      .then((res) => res.json())
-      .then((data) => {
-        setData(data);
-        setLoading(false);
-      })
-      .catch((err) => {
-        console.error('Error fetching pools:', err);
-        // Fallback para que no rompa si falla el fetch
-        setLoading(false);
-        setData([]); 
-      });
-  }, []);
+    const fetch = async () => {
+      setLoading(true);
+    try {
+      const res = await api.getPool(1, 10000);
+      setData(res || []);
+    } catch (error) {
+        console.error('Error fetching pools:', error);
+    }
+        setLoading(false);  
+      };
+    fetch();
+    }, []);
 
   // --- HELPERS ---
   const formatBytes = (bytes, decimals = 2) => {

@@ -66,7 +66,7 @@ const M2MView = () => {
     if (searchTerm.trim() !== "") {
       const lowerTerm = searchTerm.toLowerCase();
       data = data.filter(d => 
-        (d.iccid && d.iccid.toLowerCase().includes(lowerTerm)) ||
+        (d.icc && d.icc.toLowerCase().includes(lowerTerm)) ||
         (d.organization && d.organization.toLowerCase().includes(lowerTerm)) ||
         (d.status_clean && d.status_clean.toLowerCase().includes(lowerTerm)) ||
         (d.rate_plan && d.rate_plan.toLowerCase().includes(lowerTerm))

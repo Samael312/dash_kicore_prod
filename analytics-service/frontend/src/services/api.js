@@ -22,5 +22,19 @@ export const api = {
   getKiwi: (page, limit) => fetchEndpoint('kiwi', page, limit),
   getInfo: (page, limit) => fetchEndpoint('info', page, limit),
   getM2M: (page, limit) => fetchEndpoint('m2m', page, limit),
-  getRenewals: (page, limit) => fetchEndpoint('renewals', page, limit)
+  getRenewals: (page, limit) => fetchEndpoint('renewals', page, limit),
+  getPool: (page, limit) => fetchEndpoint('pools', page, limit),
+
+  // --- CORRECCIÓN ---
+  getHistory: async (icc, payload) => {
+    try {
+      const response = await axios.post(`${API_BASE}/m2m/${icc}/history`, payload);
+      
+      return response.data;
+    } catch (error) {
+      console.error("Error en getHistory:", error);
+      // Retornamos estructura vacía para evitar romper la UI si falla
+      return { labels: [], datasets: [] }; 
+    }
+  }
 };

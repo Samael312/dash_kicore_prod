@@ -1,7 +1,8 @@
 # Archivo: main.py
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, HTTPException, Query, Body
 from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel # <--- NECESARIO PARA EL BODY DEL POST
 import pandas as pd
 import numpy as np
 import math
@@ -16,6 +17,10 @@ from app.logic.data_renewal import process_renewals_logic
 
 # Instancia global del cliente
 client = CoreClient()
+class HistoryRequest(BaseModel):
+    start_date: str # Debería ser formato YYYY-MM-DD
+    end_date: str   # Debería ser formato YYYY-MM-DD
+    monthly: bool
 
 # 2. DEFINICIÓN DEL LIFESPAN
 @asynccontextmanager
@@ -40,6 +45,12 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# --- MODELOS PYDANTIC ---
+class HistoryRequest(BaseModel):
+    start_date: str
+    end_date: str
+    monthly: bool
 
 # --- HELPER "NUCLEAR" PARA LIMPIAR NaN ---
 def clean_df(df):
@@ -176,6 +187,32 @@ def get_m2m_dashboard(
         raise HTTPException(status_code=500, detail=str(e))
 
 # ==========================================
+# ENDPOINT 3.1: M2M HISTORY (INDIVIDUAL)
+# ==========================================
+@app.post("/internal/dashboard/m2m/{icc}/history")
+def get_m2m_history_dashboard(
+    icc: str,
+    payload: HistoryRequest
+):
+    try:
+        clean_icc = icc.strip()
+        print(f"🔎 Consultando historial para ICC: {clean_icc}")
+        
+        # Validación básica de fechas para evitar el error "Error en la operación"
+        if "string" in payload.start_date or not payload.start_date:
+             raise HTTPException(status_code=400, detail="Debes enviar fechas reales (YYYY-MM-DD), no 'string'")
+
+        data = client.get_m2m_history(clean_icc, payload.model_dump())
+        return data
+
+    except ValueError as ve:
+        # Capturamos el error lógico de Kiconex
+        raise HTTPException(status_code=400, detail=str(ve))
+    except Exception as e:
+        print(f"❌ Error Server: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+    
+# ==========================================
 # ENDPOINT 4: POOLS
 # ==========================================
 @app.get("/internal/dashboard/pools")
@@ -212,9 +249,6 @@ def get_renewals_dashboard(
     raw_ren = client.get_deviceRenewals(show_all=show_all, from_date=from_date, to=to)
     raw_devices = client.get_devicesB()
     raw_models = client.get_deviceModels()
-    # -----------------------------------------------------------------
-    # CORRECCIÓN: Agregamos raw_software para el cruce device->model
-    # -----------------------------------------------------------------
     raw_software = client.get_deviceSoftware() 
 
     try:
@@ -223,7 +257,7 @@ def get_renewals_dashboard(
             raw_ren, 
             raw_devices, 
             raw_models, 
-            raw_software # <--- Nuevo argumento
+            raw_software 
         )
         
         # D. Paginación manual sobre la lista resultante

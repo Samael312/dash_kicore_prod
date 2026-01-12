@@ -23,3 +23,4 @@ class Settings:
     URL_REN = f"{BASE_URL}/boards/renewals"
     URL_INFO = f"{BASE_URL}/boards/info"
     URL_M2M = f"{BASE_URL}/m2m"
+    URL_HISTORY = f"{BASE_URL}/m2m/{{icc}}/consumes"

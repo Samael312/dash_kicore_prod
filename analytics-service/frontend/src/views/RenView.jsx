@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { api } from '../services/api'; 
+import TableCard from '../components/TableCard'; // Importado como en M2MView
 import { 
-  AlertCircle, CheckCircle, Clock, Server, Loader2, Calendar, Filter, ArrowUp,
-  ArrowDown, X, Check, MousePointerClick, ChevronRight, ChevronLeft, ChevronDown, 
-  Monitor, Search, FileSpreadsheet 
+  AlertCircle, CheckCircle, Clock, Server, Loader2, Calendar, 
+  MousePointerClick, ChevronRight, ChevronLeft, ChevronDown, 
+  Monitor, Search
 } from 'lucide-react';
 
 // --- CHART.JS IMPORTS ---
@@ -105,7 +106,7 @@ const RenewalsDashboard = () => {
   // Estados para Timeline
   const [selectedMonthData, setSelectedMonthData] = useState(null);
 
-  // Estados para Tabla
+  // Estados para Tabla (Igual que M2MView)
   const [searchTerm, setSearchTerm] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const [rowsPerPage, setRowsPerPage] = useState(10);
@@ -140,7 +141,6 @@ const RenewalsDashboard = () => {
     rawData.forEach(device => {
       totalDevices++;
       
-      // --- CORRECCIÓN DE ERROR AQUÍ ---
       const currentState = device.ki_subscription_state || 'Sin Suscripción';
       stateCount[currentState] = (stateCount[currentState] || 0) + 1;
 
@@ -158,7 +158,6 @@ const RenewalsDashboard = () => {
             else if (diffDays <= 30) expiringSoon++;
             else active++;
 
-            // Agrupar por Mes (YYYY-MM)
             const monthKey = renewDate.toISOString().slice(0, 7); 
             
             if (!renewalsTimeline[monthKey]) {
@@ -167,7 +166,7 @@ const RenewalsDashboard = () => {
 
             renewalsTimeline[monthKey].count += 1;
             renewalsTimeline[monthKey].items.push({
-                date: device.date_to_renew, // "2025-11-10"
+                date: device.date_to_renew,
                 name: device.name,
                 uuid: device.uuid,
                 real_model_name: device.real_model_name || device.model
@@ -177,7 +176,6 @@ const RenewalsDashboard = () => {
       } else { active++; }
     });
 
-    // Chart Data Preparation
     const pieLabels = Object.keys(stateCount);
     const pieChartData = {
       labels: pieLabels,
@@ -205,7 +203,7 @@ const RenewalsDashboard = () => {
       datasets: [{
         label: 'Vencimientos',
         data: sortedDates.map(d => renewalsTimeline[d].count),
-        extraData: sortedDates.map(d => renewalsTimeline[d].items), // Guardamos items para el click
+        extraData: sortedDates.map(d => renewalsTimeline[d].items),
         borderColor: '#EF4444',
         backgroundColor: 'rgba(239, 68, 68, 0.1)',
         tension: 0.3,
@@ -218,40 +216,38 @@ const RenewalsDashboard = () => {
     return { kpis: { totalDevices, expired, expiringSoon, active }, pieChartData, barChartData, lineChartData };
   }, [rawData]);
 
-  // 3. LOGICA TABLA (Filtrado y Paginación)
-  const filteredItems = useMemo(() => {
-    return rawData.filter(item => {
-      const term = searchTerm.toLowerCase();
-      return (
-        (item.name?.toLowerCase() || '').includes(term) ||
-        (item.uuid?.toLowerCase() || '').includes(term) ||
-        (item.real_model_name?.toLowerCase() || '').includes(term) ||
-        (item.ki_subscription_state?.toLowerCase() || '').includes(term)
+  // 3. LÓGICA DE FILTRADO Y PAGINACIÓN
+  const filteredData = useMemo(() => {
+    let data = rawData;
+    if (searchTerm.trim() !== "") {
+      const lowerTerm = searchTerm.toLowerCase();
+      data = data.filter(item => 
+        (item.name?.toLowerCase() || '').includes(lowerTerm) ||
+        (item.uuid?.toLowerCase() || '').includes(lowerTerm) ||
+        (item.real_model_name?.toLowerCase() || '').includes(lowerTerm) ||
+        (item.ki_subscription_state?.toLowerCase() || '').includes(lowerTerm)
       );
-    });
+    }
+    return data;
   }, [rawData, searchTerm]);
 
-  const totalItems = filteredItems.length;
-  const totalPages = Math.ceil(totalItems / rowsPerPage);
-  
-  const currentItems = useMemo(() => {
-    const indexOfLastItem = currentPage * rowsPerPage;
-    const indexOfFirstItem = indexOfLastItem - rowsPerPage;
-    return filteredItems.slice(indexOfFirstItem, indexOfLastItem);
-  }, [filteredItems, currentPage, rowsPerPage]);
+  // Reiniciar a página 1 si cambian los filtros
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, rowsPerPage]);
 
+  const totalItems = filteredData.length;
+  const totalPages = Math.ceil(totalItems / rowsPerPage);
   const indexOfLastItem = currentPage * rowsPerPage;
   const indexOfFirstItem = indexOfLastItem - rowsPerPage;
+  const currentItems = filteredData.slice(indexOfFirstItem, indexOfLastItem);
 
   // --- HELPERS ---
-  
-  // Click en Timeline
   const handleSelection = (index) => {
     if (!lineChartData || !lineChartData.labels[index]) return;
     const monthLabel = lineChartData.labels[index];
     const itemsArray = lineChartData.datasets[0].extraData[index]; 
     
-    // Agrupar por día
     const groups = {};
     itemsArray.forEach(item => {
         if (!groups[item.date]) groups[item.date] = { date: item.date, count: 0, devices: [] };
@@ -267,20 +263,18 @@ const RenewalsDashboard = () => {
     });
   };
 
-  // Badge Status para Tabla
+  // Helper para renderizado de columna
   const getStatusBadge = (dateStr) => {
-    if (!dateStr) return <span className="px-2 py-1 bg-gray-100 text-gray-600 rounded text-xs font-bold">INDEFINIDO</span>;
+    if (!dateStr) return <span className="px-2 py-1 bg-gray-100 text-gray-600 rounded-full text-xs font-bold">INDEFINIDO</span>;
     const today = new Date();
     const renewDate = new Date(dateStr);
     const diffDays = Math.ceil((renewDate - today) / (1000 * 60 * 60 * 24));
 
-    if (diffDays < 0) return <span className="px-2 py-1 bg-red-100 text-red-700 rounded text-xs font-bold w-fit flex items-center"><AlertCircle size={12} className="mr-1"/> VENCIDO</span>;
-    if (diffDays <= 30) return <span className="px-2 py-1 bg-yellow-100 text-yellow-700 rounded text-xs font-bold w-fit flex items-center"><Clock size={12} className="mr-1"/> POR VENCER</span>;
-    return <span className="px-2 py-1 bg-green-100 text-green-700 rounded text-xs font-bold w-fit flex items-center"><CheckCircle size={12} className="mr-1"/> ACTIVO</span>;
+    if (diffDays < 0) return <span className="px-2 py-1 bg-red-100 text-red-700 rounded-full text-xs font-bold w-fit flex items-center"><AlertCircle size={12} className="mr-1"/> VENCIDO</span>;
+    if (diffDays <= 30) return <span className="px-2 py-1 bg-yellow-100 text-yellow-700 rounded-full text-xs font-bold w-fit flex items-center"><Clock size={12} className="mr-1"/> POR VENCER</span>;
+    return <span className="px-2 py-1 bg-green-100 text-green-700 rounded-full text-xs font-bold w-fit flex items-center"><CheckCircle size={12} className="mr-1"/> ACTIVO</span>;
   };
 
-
-  // Inicializar Timeline con el ultimo mes
   useEffect(() => {
     if (lineChartData && lineChartData.labels.length > 0 && !selectedMonthData) {
         handleSelection(lineChartData.labels.length - 1);
@@ -295,27 +289,28 @@ const RenewalsDashboard = () => {
     scales: { y: { beginAtZero: true, ticks: { precision: 0 } }, x: { grid: { display: false } } }
   };
 
- // --- RENDERIZADO ---
-    if (loading) {
-      return (
-        <div className="flex flex-col items-center justify-center h-screen bg-gray-50 text-gray-500">
-          <Loader2 className="animate-spin mb-2" size={48} />
-          <p>Cargando datos...</p>
-        </div>
-      );
-    }
+  // --- RENDERIZADO ---
+  if (loading) {
+     return (
+       <div className="flex flex-col items-center justify-center h-screen bg-gray-50 text-gray-500">
+         <Loader2 className="animate-spin mb-2" size={48} />
+         <p>Cargando datos...</p>
+       </div>
+     );
+  }
+
   if (!kpis) return <div className="p-10 text-center">No hay datos disponibles.</div>;
 
   return (
-    <div className="p-6 bg-gray-50 min-h-screen animate-fade-in pb-20">
+    <div className="space-y-6 w-full min-w-0 p-1 animate-fade-in pb-10">
       
       {/* HEADER */}
-      <div className="flex justify-between items-center mb-6">
-        <h2 className="text-2xl font-bold text-blue-900">📊 Dashboard de Renovaciones</h2>
+      <div className="bg-white p-4 rounded shadow border border-gray-200 flex flex-col md:flex-row justify-between items-center w-full">
+        <h2 className="text-2xl font-bold text-blue-900 mb-2 md:mb-0">📊 Dashboard de Renovaciones</h2>
       </div>
 
       {/* KPIS */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 w-full">
         <KPICard title="Total Dispositivos" value={kpis.totalDevices} icon={<Server />} color="bg-blue-500" />
         <KPICard title="Licencias Activas" value={kpis.active} icon={<CheckCircle />} color="bg-green-500" />
         <KPICard title="Por Vencer (30 días)" value={kpis.expiringSoon} icon={<Clock />} color="bg-yellow-500" />
@@ -323,27 +318,31 @@ const RenewalsDashboard = () => {
       </div>
 
       {/* PIE & BAR CHARTS */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
-        <div className="bg-white p-6 rounded shadow-sm border border-gray-200">
-          <h3 className="text-lg font-bold mb-4 text-gray-700">Estado de Producción</h3>
-          <div className="h-72 relative"><Pie data={pieChartData} options={{...commonOptions, plugins: {legend: {position: 'right'}}}} /></div>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 w-full">
+        <div className="bg-white p-4 rounded shadow border border-gray-200 w-full flex flex-col">
+          <h3 className="font-bold text-gray-700 mb-4">Estado de Producción</h3>
+          <div className="h-72 w-full relative">
+             <Pie data={pieChartData} options={{...commonOptions, plugins: {legend: {position: 'right'}}}} />
+          </div>
         </div>
-        <div className="bg-white p-6 rounded shadow-sm border border-gray-200">
-          <h3 className="text-lg font-bold mb-4 text-gray-700">Distribución por Modelo</h3>
-          <div className="h-72 relative"><Bar data={barChartData} options={{...commonOptions, indexAxis: 'y', plugins: {legend: {display: false}}}} /></div>
+        <div className="bg-white p-4 rounded shadow border border-gray-200 w-full flex flex-col">
+          <h3 className="font-bold text-gray-700 mb-4">Distribución por Modelo</h3>
+          <div className="h-72 w-full relative">
+            <Bar data={barChartData} options={{...commonOptions, indexAxis: 'y', plugins: {legend: {display: false}}}} />
+          </div>
         </div>
       </div>
 
       {/* TIMELINE + LEGEND BOX */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch mb-8">
-        <div className="lg:col-span-8 bg-white p-6 rounded shadow-sm border border-gray-200 flex flex-col">
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 w-full">
+        <div className="lg:col-span-8 bg-white p-6 rounded shadow border border-gray-200 flex flex-col w-full">
           <div className="flex justify-between items-center mb-4">
-            <h3 className="text-lg font-bold text-gray-700">Próximos Vencimientos (Mes a Mes)</h3>
+            <h3 className="text-lg font-bold text-gray-700">Próximos Vencimientos</h3>
             <span className="text-xs text-blue-500 bg-blue-50 px-2 py-1 rounded">Haz clic para ver detalles</span>
           </div>
-          <div className="h-80 relative flex-grow"><Line data={lineChartData} options={lineOptions} /></div>
+          <div className="h-80 w-full relative"><Line data={lineChartData} options={lineOptions} /></div>
         </div>
-        <div className="lg:col-span-4 h-full min-h-[350px]">
+        <div className="lg:col-span-4 w-full h-full">
              <LegendBox 
                 title={selectedMonthData ? selectedMonthData.title : "Selecciona un mes"} 
                 subtitle={selectedMonthData ? selectedMonthData.subtitle : ""}
@@ -352,71 +351,94 @@ const RenewalsDashboard = () => {
         </div>
       </div>
 
-      {/* TABLA DETALLADA */}
+      {/* TABLA CON PAGINACIÓN Y FILTROS (Estilo M2MView) */}
       <div className="w-full bg-white rounded shadow border border-gray-200 overflow-hidden flex flex-col">
-        <div className="px-6 py-4 border-b border-gray-200 bg-white">
-            <h3 className="text-lg font-bold text-gray-800">Listado Detallado</h3>
-        </div>
         
-        {/* FILTROS TABLA */}
+        {/* BARRA DE HERRAMIENTAS */}
         <div className="p-4 border-b border-gray-200 flex flex-col sm:flex-row justify-between items-center gap-4 bg-gray-50">
+           {/* Buscador */}
            <div className="relative w-full sm:w-96">
-            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none"><Search size={18} className="text-gray-400" /></div>
+            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+              <Search size={18} className="text-gray-400" />
+            </div>
             <input
-              type="text" placeholder="Buscar por UUID, Nombre..."
-              className="pl-10 pr-4 py-2 border border-gray-300 rounded-md w-full focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
-              value={searchTerm} onChange={(e) => { setSearchTerm(e.target.value); setCurrentPage(1); }}
+              type="text"
+              placeholder="Buscar por UUID, Nombre, Modelo..."
+              className="pl-10 pr-4 py-2 border border-gray-300 rounded-md w-full focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
             />
           </div>
-          <select className="border border-gray-300 rounded-md py-1 px-2 text-sm" value={rowsPerPage} onChange={(e) => { setRowsPerPage(Number(e.target.value)); setCurrentPage(1); }}>
-              <option value={5}>5 por pág</option>
-              <option value={10}>10 por pág</option>
-              <option value={50}>50 por pág</option>
-          </select>
-        </div>
 
-        {/* TABLA */}
-        <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
-              <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">UUID / Nombre</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Modelo</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Suscripción</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">F. Renovación</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Estado</th>
-              </tr>
-            </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
-              {currentItems.length > 0 ? (
-                currentItems.map((row, idx) => (
-                  <tr key={row.uuid || idx} className="hover:bg-gray-50 transition-colors">
-                    <td className="px-6 py-4">
-                       <div className="text-xs font-mono text-gray-500">{row.uuid}</div>
-                       <div className="font-semibold text-gray-700">{row.name || '-'}</div>
-                    </td>
-                    <td className="px-6 py-4 text-sm text-gray-700">{row.real_model_name}</td>
-                    <td className="px-6 py-4 text-sm text-gray-500">{row.ki_subscription_state}</td>
-                    <td className="px-6 py-4 text-sm text-gray-500">{row.date_to_renew || 'N/A'}</td>
-                    <td className="px-6 py-4">{getStatusBadge(row.date_to_renew)}</td>
-                  </tr>
-                ))
-              ) : (
-                <tr><td colSpan="5" className="px-6 py-10 text-center text-sm text-gray-500">No hay resultados.</td></tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-
-        {/* PAGINACION */}
-        <div className="px-6 py-4 border-t border-gray-200 bg-gray-50 flex items-center justify-between">
-          <div className="text-sm text-gray-600">Mostrando {indexOfFirstItem + 1}-{Math.min(indexOfLastItem, totalItems)} de {totalItems}</div>
-          <div className="flex gap-2">
-            <button onClick={() => setCurrentPage(p => Math.max(p - 1, 1))} disabled={currentPage === 1} className="px-3 py-1 border rounded bg-white hover:bg-gray-100 disabled:opacity-50 flex items-center text-sm"><ChevronLeft size={16}/> Anterior</button>
-            <span className="px-3 py-1 bg-blue-100 text-blue-800 font-bold rounded text-sm">{currentPage}</span>
-            <button onClick={() => setCurrentPage(p => Math.min(p + 1, totalPages))} disabled={currentPage === totalPages} className="px-3 py-1 border rounded bg-white hover:bg-gray-100 disabled:opacity-50 flex items-center text-sm">Siguiente <ChevronRight size={16}/></button>
+          {/* Selector de Filas */}
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-gray-600">Mostrar:</span>
+            <select
+              className="border border-gray-300 rounded-md py-1 px-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              value={rowsPerPage}
+              onChange={(e) => setRowsPerPage(Number(e.target.value))}
+            >
+              <option value={5}>5</option>
+              <option value={10}>10</option>
+              <option value={25}>25</option>
+              <option value={50}>50</option>
+              <option value={100}>100</option>
+            </select>
           </div>
         </div>
+
+        {/* COMPONENTE TABLECARD REUTILIZADO */}
+        <TableCard 
+          title="Listado de Renovaciones"
+          data={currentItems} 
+          columns={[
+            { header: "UUID / Nombre", accessor: "uuid", render: (r) => (
+               <div>
+                  <div className="text-xs font-mono text-gray-500">{r.uuid}</div>
+                  <div className="font-semibold text-gray-700">{r.name || '-'}</div>
+               </div>
+            )},
+            { header: "Modelo", accessor: "real_model_name", render: (r) => <span className="text-sm text-gray-700">{r.real_model_name}</span> },
+            { header: "Suscripción", accessor: "ki_subscription_state", render: (r) => <span className="text-sm text-gray-500">{r.ki_subscription_state}</span> },
+            { header: "F. Renovación", accessor: "date_to_renew", render: (r) => <span className="text-sm text-gray-500">{r.date_to_renew || 'N/A'}</span> },
+            { header: "Estado", accessor: "status", render: (r) => getStatusBadge(r.date_to_renew) },
+          ]}
+          loading={loading}
+          page={currentPage}
+          setPage={setCurrentPage}
+          limit={rowsPerPage}
+          hasMore={false}
+        />
+
+        {/* FOOTER PAGINACIÓN (Exactamente como M2MView) */}
+        <div className="px-6 py-4 border-t border-gray-200 bg-gray-50 flex items-center justify-between">
+          <div className="text-sm text-gray-600">
+            Mostrando <span className="font-bold">{totalItems === 0 ? 0 : indexOfFirstItem + 1}</span> a <span className="font-bold">{Math.min(indexOfLastItem, totalItems)}</span> de <span className="font-bold">{totalItems}</span> resultados
+          </div>
+          
+          <div className="flex gap-2">
+            <button
+              onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+              disabled={currentPage === 1 || totalItems === 0}
+              className="px-3 py-1 border border-gray-300 rounded bg-white text-gray-600 hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed flex items-center"
+            >
+              <ChevronLeft size={16} className="mr-1" /> Anterior
+            </button>
+            
+            <span className="px-3 py-1 bg-blue-100 text-blue-800 font-bold rounded border border-blue-200">
+              {currentPage}
+            </span>
+
+            <button
+              onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+              disabled={currentPage === totalPages || totalItems === 0}
+              className="px-3 py-1 border border-gray-300 rounded bg-white text-gray-600 hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed flex items-center"
+            >
+              Siguiente <ChevronRight size={16} className="ml-1" />
+            </button>
+          </div>
+        </div>
+
       </div>
     </div>
   );

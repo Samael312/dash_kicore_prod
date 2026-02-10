@@ -82,7 +82,7 @@ def paginate_df(df: pd.DataFrame, limit: int, offset: int):
 # ==========================================
 @app.get("/internal/dashboard/devices")
 def get_devices_dashboard(
-    limit: int = Query(10000, ge=1, description="Cantidad de registros a traer"),
+    limit: int = Query(5000, ge=1, description="Cantidad de registros a traer"),
     offset: int = Query(0, ge=0, description="Desde qué registro empezar")
 ):
     raw_devices = client.get_devicesB()
@@ -117,7 +117,7 @@ def get_devices_dashboard(
 # ==========================================
 @app.get("/internal/dashboard/kiwi")
 def get_kiwi_dashboard(
-    limit: int = Query(10000, ge=1),
+    limit: int = Query(5000, ge=1),
     offset: int = Query(0, ge=0)
 ):
     raw_kiwi = client.get_devicesKiwi()
@@ -147,7 +147,7 @@ def get_kiwi_dashboard(
 # ==========================================
 @app.get("/internal/dashboard/info")
 def get_info_dashboard(
-    limit: int = Query(10000, ge=1),
+    limit: int = Query(5000, ge=1),
     offset: int = Query(0, ge=0)
 ):
     raw_info = client.get_deviceInfo()
@@ -169,7 +169,7 @@ def get_info_dashboard(
 # ==========================================
 @app.get("/internal/dashboard/m2m")
 def get_m2m_dashboard(
-    limit: int = Query(10000, ge=1),
+    limit: int = Query(5000, ge=1),
     offset: int = Query(0, ge=0)
 ):
     raw_m2m = client.get_m2m()
@@ -217,7 +217,7 @@ def get_m2m_history_dashboard(
 # ==========================================
 @app.get("/internal/dashboard/pools")
 def get_pools_dashboard(
-    limit: int = Query(10000, ge=1),
+    limit: int = Query(5000, ge=1),
     offset: int = Query(0, ge=0)
 ):
     raw_pool = client.get_pools()
@@ -239,7 +239,7 @@ def get_pools_dashboard(
 # ==========================================
 @app.get("/internal/dashboard/renewals")
 def get_renewals_dashboard(
-    limit: int = Query(10000, ge=1),
+    limit: int = Query(5000, ge=1),
     offset: int = Query(0, ge=0),
     show_all: bool = Query(True),
     from_date: str = Query(None),

@@ -69,12 +69,14 @@ def _merge_model_info(df_devices, df_software, df_models):
 
 def _get_status_label(val):
     s = str(val).lower()
-    return "Conectado" if s in ["terminado", "online", "connected", "true"] else "Desconectado"
+    return "Terminado" if s in ["terminado", "online", "connected", "true"] else "Sin Terminar"
 
 def _get_enabled_label(val):
     s = str(val).lower()
     return "Habilitado" if s in ["terminado", "asignado", "fabricado", "true", "enabled"] else "Deshabilitado"
-
+# -------------------------------------------------------------------------
+# BOARDS
+# -------------------------------------------------------------------------
 def prepare_boards(data, df_models=None, df_soft=None):
     """
     Prepara Boards (Sin lógica de renovaciones). 
@@ -110,7 +112,7 @@ def prepare_boards(data, df_models=None, df_soft=None):
     col_state = "state" if "state" in df.columns else "status"
 
     df["status_clean"] = df[col_state].apply(_get_status_label) if col_state in df.columns else "Desconectado"
-    df["enabled_clean"] = df[col_state].apply(_get_enabled_label) if col_state in df.columns else "Deshabilitado"
+    
 
     # Conversión final para evitar NaN en JSON
     df = df.astype(object)
@@ -174,9 +176,10 @@ def prepare_kiwi(data, df_models=None, df_soft=None):
     df["organization"] = "Sin Asignar"
     col_state = "state" if "state" in df.columns else "status"
     
-    df["status_clean"] = df[col_state].apply(_get_status_label) if col_state in df.columns else "Desconectado"
-    df["enabled_clean"] = df[col_state].apply(_get_enabled_label) if col_state in df.columns else "Deshabilitado"
+    df["status_clean"] = df[col_state].apply(_get_status_label) if col_state in df.columns else "Sin Terminar"
+    
 
+    # Conversión final para evitar NaN en JSON
     df = df.astype(object)
     df = df.where(pd.notnull(df), None)
 

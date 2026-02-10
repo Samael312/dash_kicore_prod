@@ -43,7 +43,7 @@ const M2MView = () => {
     const fetch = async () => {
       setLoading(true);
       try {
-        const res = await api.getM2M(1, 10000); 
+        const res = await api.getM2M(1, 5000); 
         setRawData(res || []);
       } catch (error) {
         console.error("Error cargando M2M:", error);
@@ -223,14 +223,12 @@ const M2MView = () => {
   );
 
   // --- RENDERIZADO ---
-   if (loading) {
-     return (
-       <div className="flex flex-col items-center justify-center h-screen bg-gray-50 text-gray-500">
-         <Loader2 className="animate-spin mb-2" size={48} />
-         <p>Cargando datos...</p>
+   if (loading) return (
+       <div className="flex flex-col items-center justify-center h-screen bg-gray-50">
+         <Loader2 className="animate-spin text-blue-500 mb-2" size={48} />
+         <p className="text-gray-500">Cargando Dashboard...</p>
        </div>
      );
-   }
 
   return (
     <div className="space-y-6 w-full min-w-0 p-1 animate-fade-in pb-10">
@@ -343,97 +341,62 @@ const M2MView = () => {
         </div>
       </div>
 
-      {/* TABLA CON PAGINACIÓN Y FILTROS */}
-      <div className="w-full bg-white rounded shadow border border-gray-200 overflow-hidden flex flex-col">
-        
-        {/* BARRA DE HERRAMIENTAS */}
-        <div className="p-4 border-b border-gray-200 flex flex-col sm:flex-row justify-between items-center gap-4 bg-gray-50">
-           {/* Buscador */}
-           <div className="relative w-full sm:w-96">
-            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-              <Search size={18} className="text-gray-400" />
-            </div>
-            <input
-              type="text"
-              placeholder="Buscar por ICCID, Estado, Plan..."
-              className="pl-10 pr-4 py-2 border border-gray-300 rounded-md w-full focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-            />
-          </div>
-
-          {/* Selector de Filas */}
-          <div className="flex items-center gap-2">
-            <span className="text-sm text-gray-600">Mostrar:</span>
-            <select
-              className="border border-gray-300 rounded-md py-1 px-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-              value={rowsPerPage}
-              onChange={(e) => setRowsPerPage(Number(e.target.value))}
+     {/* TABLA CON PAGINACIÓN Y FILTROS */}
+    <TableCard
+      title="Listado M2M Completo"
+      data={currentItems}
+      columns={[
+        {
+          header: "ICCID",
+          accessor: "icc",
+          render: (r) => (
+            <span className="font-mono text-xs text-gray-600">{r.icc}</span>
+          )
+        },
+        {
+          header: "Estado",
+          accessor: "status_clean",
+          render: (r) => (
+            <span
+              className={`px-2 py-1 rounded-full text-xs font-bold ${
+                r.status_clean === "Active" || r.status_clean === "Conectado"
+                  ? "bg-green-100 text-green-800"
+                  : "bg-red-100 text-red-800"
+              }`}
             >
-              <option value={5}>5</option>
-              <option value={10}>10</option>
-              <option value={25}>25</option>
-              <option value={50}>50</option>
-              <option value={100}>100</option>
-            </select>
-          </div>
-        </div>
-
-        {/* TABLA */}
-        <TableCard 
-          title="Listado M2M Completo"
-          data={currentItems} 
-          columns={[
-            { header: "ICCID", accessor: "icc", render: (r) => <span className="font-mono text-xs text-gray-600">{r.icc}</span> },
-            { header: "Estado", accessor: "status_clean", render: (r) => (
-                <span className={`px-2 py-1 rounded-full text-xs font-bold ${
-                  r.status_clean === 'Active' || r.status_clean === 'Conectado' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
-                }`}>
-                  {r.status_clean}
-                </span>
-            )},
-            { header: "Org", accessor: "organization" },
-            { header: "País", accessor: "country_code" },
-            { header: "Plan", accessor: "rate_plan" },
-            { header: "Mes (MB)", accessor: "cons_month_mb", render: r => r.cons_month_mb?.toFixed(2) },
-          ]}
-          loading={loading}
-          page={currentPage}
-          setPage={setCurrentPage}
-          limit={rowsPerPage}
-          hasMore={false}
-        />
-
-        {/* FOOTER PAGINACIÓN */}
-        <div className="px-6 py-4 border-t border-gray-200 bg-gray-50 flex items-center justify-between">
-          <div className="text-sm text-gray-600">
-            Mostrando <span className="font-bold">{totalItems === 0 ? 0 : indexOfFirstItem + 1}</span> a <span className="font-bold">{Math.min(indexOfLastItem, totalItems)}</span> de <span className="font-bold">{totalItems}</span> resultados
-          </div>
-          
-          <div className="flex gap-2">
-            <button
-              onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
-              disabled={currentPage === 1 || totalItems === 0}
-              className="px-3 py-1 border border-gray-300 rounded bg-white text-gray-600 hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed flex items-center"
-            >
-              <ChevronLeft size={16} className="mr-1" /> Anterior
-            </button>
-            
-            <span className="px-3 py-1 bg-blue-100 text-blue-800 font-bold rounded border border-blue-200">
-              {currentPage}
+              {r.status_clean}
             </span>
+          )
+        },
+        { header: "Org", accessor: "organization" },
+        { header: "País", accessor: "country_code" },
+        { header: "Plan", accessor: "rate_plan" },
+        {
+          header: "Mes (MB)",
+          accessor: "cons_month_mb",
+          render: (r) =>
+            typeof r.cons_month_mb === "number" ? r.cons_month_mb.toFixed(2) : ""
+        }
+      ]}
+      loading={loading}
 
-            <button
-              onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
-              disabled={currentPage === totalPages || totalItems === 0}
-              className="px-3 py-1 border border-gray-300 rounded bg-white text-gray-600 hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed flex items-center"
-            >
-              Siguiente <ChevronRight size={16} className="ml-1" />
-            </button>
-          </div>
-        </div>
+      /* paginación */
+      currentPage={currentPage}
+      setCurrentPage={setCurrentPage}
+      totalItems={totalItems}
+      pageSize={rowsPerPage}
+      setPageSize={setRowsPerPage}
+      totalPages={Math.ceil(totalItems / rowsPerPage)}
 
-      </div>
+      /* toolbar */
+      enableToolbar
+      searchTerm={searchTerm}
+      setSearchTerm={setSearchTerm}
+      searchPlaceholder="Buscar por ICCID, Estado, Plan..."
+      searchableKeys={["icc", "status_clean", "organization", "country_code", "rate_plan"]}
+      rowsPerPageOptions={[5, 10, 25, 50, 100]}
+    />
+
     </div>
   );
 };

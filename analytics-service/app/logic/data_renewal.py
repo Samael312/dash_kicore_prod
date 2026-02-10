@@ -7,6 +7,20 @@ def _clean_uuid(series):
         return series
     return series.astype(str).str.strip().str.lower()
 
+def _get_status_label(val):
+    
+    s = str(val).lower().strip() if val is not None else ""
+    
+    # Diccionario de estados: Valor de entrada -> Etiqueta de salida
+    status_map = {
+        "active": "Activa",
+        "inactive": "Inactiva",
+        "cancelled": "Cancelada",
+        "not-applicable": "No Aplicable",
+    }
+    
+    return status_map.get(s, "Inactive")
+
 def process_renewals_logic(raw_ren, raw_devices, raw_models, raw_software):
     """
     Lógica optimizada para cruzar:
@@ -152,7 +166,11 @@ def process_renewals_logic(raw_ren, raw_devices, raw_models, raw_software):
              else:
                  df_final['ki_subscription_state'] = 'Sin Suscripción'
 
+        df_final['ki_subscription_state'] = df_final['ki_subscription_state'].apply(_get_status_label)
+
         return _clean_and_return(df_final)
+    
+       
 
     except Exception as e:
         print(f"⚠️ Error procesando renewals: {e}")

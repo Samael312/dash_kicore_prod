@@ -42,7 +42,7 @@ const KiwiView = () => {
     const fetch = async () => {
       setLoading(true);
       try {
-        const res = await api.getKiwi(1, 10000); 
+        const res = await api.getKiwi(1, 5000); 
         setRawData(res || []);
       } catch (error) {
         console.error("Error cargando Kiwi:", error);
@@ -89,13 +89,13 @@ const KiwiView = () => {
 
   // --- KPIs y ESTADÍSTICAS ---
   const totalDevices = filteredData.length;
-  const onlineDevices = filteredData.filter(d => d.status_clean === 'Conectado').length;
+  const onlineDevices = filteredData.filter(d => d.status_clean === 'Terminado').length;
   const onlinePct = totalDevices > 0 ? ((onlineDevices / totalDevices) * 100).toFixed(1) : 0;
 
   // Stats para Gráficas
   const softwareStats = useMemo(() => {
     const counts = filteredData.reduce((acc, curr) => {
-      const m = curr.model || "Desconocido"; 
+      const m = curr.model || "Sin Terminar"; 
       acc[m] = (acc[m] || 0) + 1;
       return acc;
     }, {});
@@ -153,7 +153,7 @@ const KiwiView = () => {
     labels: statusStats.map(d => d.name),
     datasets: [{
       data: statusStats.map(d => d.value),
-      backgroundColor: statusStats.map(d => d.name === 'Conectado' ? '#10b981' : '#ef4444'),
+      backgroundColor: statusStats.map(d => d.name === 'Terminado' ? '#10b981' : '#ef4444'),
       borderWidth: 1,
       borderColor: '#ffffff',
     }]
@@ -187,14 +187,12 @@ const KiwiView = () => {
   );
 
      // --- RENDERIZADO ---
-  if (loading) {
-    return (
-      <div className="flex flex-col items-center justify-center h-screen bg-gray-50 text-gray-500">
-        <Loader2 className="animate-spin mb-2" size={48} />
-        <p>Cargando datos...</p>
+  if (loading) return (
+      <div className="flex flex-col items-center justify-center h-screen bg-gray-50">
+        <Loader2 className="animate-spin text-blue-500 mb-2" size={48} />
+        <p className="text-gray-500">Cargando Dashboard...</p>
       </div>
     );
-  }
 
   return (
     <div className="flex flex-col gap-6 w-full max-w-none animate-fade-in pb-10">
@@ -226,7 +224,7 @@ const KiwiView = () => {
           <span className="text-4xl font-bold text-blue-900 mt-2">{totalDevices}</span>
         </div>
         <div className="bg-white p-6 rounded shadow border-l-4 border-green-500 flex flex-col justify-between">
-          <span className="text-gray-500 text-sm font-bold uppercase">Conectados (Online)</span>
+          <span className="text-gray-500 text-sm font-bold uppercase">Terminados (En Producción)</span>
           <div className="flex items-baseline gap-2 mt-2">
             <span className="text-4xl font-bold text-green-700">{onlineDevices}</span>
             <span className="text-sm text-green-600 font-medium">({onlinePct}%)</span>
@@ -308,7 +306,7 @@ const KiwiView = () => {
             { header: "Software / Modelo", accessor: "model" },
             { header: "Estado", accessor: "status_clean", render: (row) => (
               <span className={`px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wide ${
-                row.status_clean === 'Conectado' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
+                row.status_clean === 'Terminado' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
               }`}>
                 {row.status_clean}
               </span>

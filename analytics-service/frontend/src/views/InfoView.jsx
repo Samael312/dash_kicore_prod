@@ -43,7 +43,7 @@ const InfoView = () => {
     const fetch = async () => {
       setLoading(true);
       try {
-        const res = await api.getInfo(1, 10000);
+        const res = await api.getInfo(1, 5000);
         setData(res || []);
       } catch (error) {
         console.error("Error cargando Info:", error);
@@ -203,14 +203,12 @@ const InfoView = () => {
   );
 
      // --- RENDERIZADO ---
-  if (loading) {
-    return (
-      <div className="flex flex-col items-center justify-center h-screen bg-gray-50 text-gray-500">
-        <Loader2 className="animate-spin mb-2" size={48} />
-        <p>Cargando datos...</p>
+  if (loading) return (
+      <div className="flex flex-col items-center justify-center h-screen bg-gray-50">
+        <Loader2 className="animate-spin text-blue-500 mb-2" size={48} />
+        <p className="text-gray-500">Cargando Dashboard...</p>
       </div>
     );
-  }
 
   return (
     <div className="w-full flex flex-col gap-6 animate-fade-in pb-10 max-w-none">

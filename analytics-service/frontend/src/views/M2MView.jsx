@@ -344,7 +344,7 @@ const M2MView = () => {
      {/* TABLA CON PAGINACIÓN Y FILTROS */}
     <TableCard
       title="Listado M2M Completo"
-      data={currentItems}
+      data={rawData}
       columns={[
         {
           header: "ICCID",
@@ -359,7 +359,7 @@ const M2MView = () => {
           render: (r) => (
             <span
               className={`px-2 py-1 rounded-full text-xs font-bold ${
-                r.status_clean === "Active" || r.status_clean === "Conectado"
+                r.status_clean === "Active" || r.status_clean === "Activo"
                   ? "bg-green-100 text-green-800"
                   : "bg-red-100 text-red-800"
               }`}

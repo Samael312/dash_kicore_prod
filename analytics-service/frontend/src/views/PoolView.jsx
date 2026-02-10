@@ -273,7 +273,7 @@ const PoolView = () => {
       {/* 5. TABLA */}
       <TableCard
         title="Pools"
-        data={currentItems}
+        data={data}
         columns={[
           { header: "Pool ID", accessor: "pool_id", render: (r) => <span className="font-mono font-bold text-blue-700 text-xs">{r.pool_id}</span> },
           { header: "Organización", accessor: "commercialGroup", render: (r) => <span className="text-gray-600 font-medium">{r.commercialGroup}</span> },

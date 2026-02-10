@@ -1,7 +1,11 @@
-
+// RenewalsDashboard.jsx (ACTUALIZADO "CON LO NUEVO" + filtros funcionando igual que DevicesView)
 import React, { useEffect, useMemo, useState } from 'react';
 import { api } from '../services/api';
 import TableCard from '../components/TableCard';
+import BarChartCard from '../components/BarChartCard';
+import PieChartCard from '../components/PieChartCard';
+import SelectDash from '../components/SelectDash';
+
 import {
   AlertCircle,
   CheckCircle,
@@ -16,7 +20,6 @@ import {
   Copy,
 } from 'lucide-react';
 
-// --- CHART.JS ---
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -30,7 +33,7 @@ import {
   Legend,
   Filler,
 } from 'chart.js';
-import { Bar, Pie, Line } from 'react-chartjs-2';
+import { Line } from 'react-chartjs-2';
 
 ChartJS.register(
   CategoryScale,
@@ -67,11 +70,7 @@ const DeviceItem = ({ device }) => {
           <span className="font-medium text-gray-700">{device.name || 'Sin Nombre'}</span>
           <span className="text-gray-400 ml-1 opacity-75">({device.real_model_name})</span>
         </span>
-        {showUuid ? (
-          <ChevronDown size={12} className="text-blue-400" />
-        ) : (
-          <ChevronRight size={12} className="text-gray-300" />
-        )}
+        {showUuid ? <ChevronDown size={12} className="text-blue-400" /> : <ChevronRight size={12} className="text-gray-300" />}
       </div>
 
       {showUuid && (
@@ -94,9 +93,7 @@ const DeviceItem = ({ device }) => {
 // --- 2) KPI CARD ---
 const KPICard = ({ title, value, icon, color }) => (
   <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200 flex items-center space-x-4">
-    <div className={`p-4 rounded-full text-white shadow-sm ${color}`}>
-      {React.cloneElement(icon, { size: 28 })}
-    </div>
+    <div className={`p-4 rounded-full text-white shadow-sm ${color}`}>{React.cloneElement(icon, { size: 28 })}</div>
     <div>
       <p className="text-xs font-bold text-gray-500 uppercase tracking-wide">{title}</p>
       <p className="text-3xl font-bold text-gray-800">{value ?? 0}</p>
@@ -104,7 +101,7 @@ const KPICard = ({ title, value, icon, color }) => (
   </div>
 );
 
-// --- 3) LEGEND BOX ---
+// --- 3) LEGEND BOX (para la línea) ---
 const LegendBox = ({ data, title, subtitle }) => {
   const [expandedDay, setExpandedDay] = useState(null);
 
@@ -141,9 +138,7 @@ const LegendBox = ({ data, title, subtitle }) => {
                     )}
                     <span className="text-gray-700 font-bold text-xs">{dayGroup.date}</span>
                   </div>
-                  <span className="bg-gray-100 text-gray-600 font-bold px-2 py-0.5 rounded text-xs">
-                    {dayGroup.count} disp.
-                  </span>
+                  <span className="bg-gray-100 text-gray-600 font-bold px-2 py-0.5 rounded text-xs">{dayGroup.count} disp.</span>
                 </div>
 
                 {expandedDay === dayGroup.date && (
@@ -166,13 +161,18 @@ const RenewalsDashboard = () => {
   const [rawData, setRawData] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  // TableCard control (TableCard hace search + filtros + paginación)
+  // TableCard control
   const [searchTerm, setSearchTerm] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const [rowsPerPage, setRowsPerPage] = useState(10);
 
   // Line selection
   const [selectedMonthData, setSelectedMonthData] = useState({ title: '', subtitle: '', data: [] });
+
+  // ✅ drilldowns desde charts
+  const [drilldownState, setDrilldownState] = useState(null); // ki_subscription_state
+  const [drilldownModel, setDrilldownModel] = useState(null); // real_model_name
+  const [drilldownStatus, setDrilldownStatus] = useState(null); // status_label
 
   useEffect(() => {
     const fetchData = async () => {
@@ -182,15 +182,15 @@ const RenewalsDashboard = () => {
         setRawData(Array.isArray(res) ? res : res?.items || []);
       } catch (e) {
         console.error('Error fetching data:', e);
+      } finally {
+        setLoading(false);
       }
-      setLoading(false);
     };
     fetchData();
   }, []);
 
   const getStatusBadge = (dateStr) => {
-    if (!dateStr)
-      return <span className="px-2 py-1 bg-gray-100 text-gray-600 rounded-full text-xs font-bold">INDEFINIDO</span>;
+    if (!dateStr) return <span className="px-2 py-1 bg-gray-100 text-gray-600 rounded-full text-xs font-bold">INDEFINIDO</span>;
     const diffDays = Math.ceil((new Date(dateStr) - new Date()) / (1000 * 60 * 60 * 24));
     if (diffDays < 0)
       return (
@@ -211,7 +211,7 @@ const RenewalsDashboard = () => {
     );
   };
 
-  // ✅ Añadimos status_label REAL al dataset para que el filtro no devuelva "Sin valor"
+  // ✅ status_label real para filtrar en tabla + pie
   const dataWithStatusLabel = useMemo(() => {
     const today = new Date();
     return (rawData || []).map((r) => {
@@ -226,24 +226,45 @@ const RenewalsDashboard = () => {
     });
   }, [rawData]);
 
-  // Procesado global (charts)
+  // ✅ dataset base para tabla (aplica drilldowns; la búsqueda/paginación la hace TableCard)
+  const filteredByControls = useMemo(() => {
+    let data = dataWithStatusLabel;
+
+    if (drilldownState) data = data.filter((d) => (d.ki_subscription_state || 'Sin Suscripción') === drilldownState);
+    if (drilldownModel) data = data.filter((d) => (d.real_model_name || d.model || 'Desconocido') === drilldownModel);
+    if (drilldownStatus) data = data.filter((d) => (d.status_label || 'INDEFINIDO') === drilldownStatus);
+
+    return data;
+  }, [dataWithStatusLabel, drilldownState, drilldownModel, drilldownStatus]);
+
+  // ✅ reset paginación cuando cambian filtros o búsqueda o page size
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [drilldownState, drilldownModel, drilldownStatus, rowsPerPage, searchTerm]);
+
+  // ✅ CLAVE: charts+kpis se calculan desde filteredByControls (igual que DevicesView)
   const processed = useMemo(() => {
-    if (!rawData || rawData.length === 0) {
+    const source = filteredByControls;
+
+    if (!source || source.length === 0) {
       return {
         kpis: { totalDevices: 0, expired: 0, expiringSoon: 0, active: 0 },
-        pieChartData: { labels: [], datasets: [{ data: [], backgroundColor: CHART_COLORS, borderWidth: 1 }] },
-        barChartData: { labels: [], datasets: [{ label: 'Cantidad', data: [], backgroundColor: '#3B82F6' }] },
+        stateStats: [],
+        modelStats: [],
+        statusStats: [],
         lineChartData: { labels: [], datasets: [{ label: 'Vencimientos', data: [], extraData: [] }] },
       };
     }
 
     const today = new Date();
     const stats = { totalDevices: 0, expired: 0, expiringSoon: 0, active: 0 };
+
     const stateCount = {};
     const modelCount = {};
-    const renewalsTimeline = {};
+    const statusCount = {};
+    const renewalsTimeline = {}; // monthKey -> {count, items}
 
-    rawData.forEach((device) => {
+    source.forEach((device) => {
       stats.totalDevices++;
 
       const state = device.ki_subscription_state || 'Sin Suscripción';
@@ -251,6 +272,9 @@ const RenewalsDashboard = () => {
 
       const model = device.real_model_name || device.model || 'Desconocido';
       modelCount[model] = (modelCount[model] || 0) + 1;
+
+      const status_label = device.status_label || 'INDEFINIDO';
+      statusCount[status_label] = (statusCount[status_label] || 0) + 1;
 
       if (device.date_to_renew) {
         const renewDate = new Date(device.date_to_renew);
@@ -279,32 +303,24 @@ const RenewalsDashboard = () => {
 
     const sortedMonths = Object.keys(renewalsTimeline).sort();
 
-    const topModels = Object.entries(modelCount)
-      .sort((a, b) => b[1] - a[1])
+    const stateStats = Object.entries(stateCount)
+      .map(([name, value]) => ({ name, value }))
+      .sort((a, b) => b.value - a.value);
+
+    const modelStats = Object.entries(modelCount)
+      .map(([name, value]) => ({ name, value }))
+      .sort((a, b) => b.value - a.value)
       .slice(0, 10);
+
+    const statusStats = Object.entries(statusCount)
+      .map(([name, value]) => ({ name, value }))
+      .sort((a, b) => b.value - a.value);
 
     return {
       kpis: stats,
-      pieChartData: {
-        labels: Object.keys(stateCount),
-        datasets: [
-          {
-            data: Object.values(stateCount),
-            backgroundColor: CHART_COLORS,
-            borderWidth: 1,
-          },
-        ],
-      },
-      barChartData: {
-        labels: topModels.map((i) => i[0]),
-        datasets: [
-          {
-            label: 'Cantidad',
-            data: topModels.map((i) => i[1]),
-            backgroundColor: '#3B82F6',
-          },
-        ],
-      },
+      stateStats,
+      modelStats,
+      statusStats,
       lineChartData: {
         labels: sortedMonths,
         datasets: [
@@ -320,7 +336,7 @@ const RenewalsDashboard = () => {
         ],
       },
     };
-  }, [rawData]);
+  }, [filteredByControls]);
 
   const handleSelection = (index) => {
     const lc = processed.lineChartData;
@@ -343,19 +359,17 @@ const RenewalsDashboard = () => {
     });
   };
 
+  // ✅ autoselect último mes disponible (sobre el dataset filtrado)
   useEffect(() => {
     const labels = processed?.lineChartData?.labels || [];
-    if (labels.length > 0 && (!selectedMonthData?.data || selectedMonthData.data.length === 0)) {
-      handleSelection(labels.length - 1);
-    }
+    if (labels.length > 0) handleSelection(labels.length - 1);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [processed.lineChartData.labels]);
+  }, [processed.lineChartData.labels?.join('|')]);
 
-  // Total items para el footer (sin paginar en el padre)
-  const totalItems = dataWithStatusLabel.length;
+  // Footer de TableCard
+  const totalItems = filteredByControls.length;
   const totalPages = Math.max(1, Math.ceil(totalItems / rowsPerPage));
-
-  const commonOptions = { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom' } } };
+  const hasActiveFilter = Boolean(drilldownState || drilldownModel || drilldownStatus);
 
   if (loading) {
     return (
@@ -368,8 +382,21 @@ const RenewalsDashboard = () => {
 
   return (
     <div className="space-y-6 p-4 animate-fade-in pb-10">
-      <div className="bg-white p-4 rounded shadow border border-gray-200">
+      <div className="bg-white p-4 rounded shadow border border-gray-200 flex items-center justify-between gap-3">
         <h2 className="text-2xl font-bold text-blue-900">📊 Dashboard de Renovaciones</h2>
+
+        {hasActiveFilter && (
+          <button
+            onClick={() => {
+              setDrilldownState(null);
+              setDrilldownModel(null);
+              setDrilldownStatus(null);
+            }}
+            className="px-4 py-2 bg-red-100 text-red-700 rounded hover:bg-red-200 text-sm font-bold border border-red-200 transition-colors"
+          >
+            Limpiar filtros ✕
+          </button>
+        )}
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
@@ -379,23 +406,94 @@ const RenewalsDashboard = () => {
         <KPICard title="Vencidas" value={processed.kpis.expired} icon={<AlertCircle />} color="bg-red-500" />
       </div>
 
-      {/* PIE & BAR */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 w-full">
-        <div className="bg-white p-4 rounded shadow border border-gray-200 w-full flex flex-col">
-          <h3 className="font-bold text-gray-700 mb-4">Estado de Producción</h3>
-          <div className="h-72 w-full relative">
-            <Pie data={processed.pieChartData} options={{ ...commonOptions, plugins: { legend: { position: 'right' } } }} />
-          </div>
-        </div>
-        <div className="bg-white p-4 rounded shadow border border-gray-200 w-full flex flex-col">
-          <h3 className="font-bold text-gray-700 mb-4">Distribución por Modelo</h3>
-          <div className="h-72 w-full relative">
-            <Bar data={processed.barChartData} options={{ ...commonOptions, indexAxis: 'y', plugins: { legend: { display: false } } }} />
-          </div>
-        </div>
-      </div>
+      {/* ✅ Secciones: ocultar/minimizar/selector */}
+      <SelectDash
+        storageKey="renewalsDashboard:sections"
+        headerTitle="Visualizaciones"
+        sections={[
+          {
+            id: 'subscription-state',
+            title: 'Estado de Producción',
+            defaultMode: 'show',
+            render: () => (
+              <PieChartCard
+                title="Estado de Producción"
+                legendTitle="Estados visibles"
+                data={processed.stateStats}
+                labelKey="name"
+                valueKey="value"
+                heightClass="h-80"
+                selectedLabel={drilldownState}
+                getColor={(i, row) => {
+                  const k = row.__label;
+                  if (k === 'Activa') return '#10B981';
+                  if (k === 'No Aplicable') return '#F59E0B';
+                  if (k === 'Cancelada') return '#EF4444';
+                  return '#9CA3AF';
+                }}
+                onSliceClick={(label) => {
+                  setDrilldownState(label);
+                  setDrilldownModel(null);
+                  setDrilldownStatus(null);
+                }}
+              />
+            ),
+          },
+          {
+            id: 'models-bar',
+            title: 'Distribución por Modelo',
+            defaultMode: 'show',
+            render: () => (
+              <BarChartCard
+                title="Distribución por Modelo"
+                legendTitle="Modelos visibles"
+                data={processed.modelStats}
+                labelKey="name"
+                valueKey="value"
+                heightClass="h-96"
+                indexAxis="y"
+                selectedLabel={drilldownModel}
+                getColor={(i) => CHART_COLORS[i % CHART_COLORS.length]}
+                onBarClick={(label) => {
+                  setDrilldownModel(label);
+                  setDrilldownState(null);
+                  setDrilldownStatus(null);
+                }}
+              />
+            ),
+          },
+          {
+            id: 'renewal-status',
+            title: 'Estado de Renovación',
+            defaultMode: 'min',
+            render: () => (
+              <PieChartCard
+                title="Estado de Renovación"
+                legendTitle="Estados visibles"
+                data={processed.statusStats}
+                labelKey="name"
+                valueKey="value"
+                heightClass="h-72"
+                selectedLabel={drilldownStatus}
+                getColor={(i, row) => {
+                  const k = row.__label;
+                  if (k === 'ACTIVO') return '#10B981';
+                  if (k === 'POR VENCER') return '#F59E0B';
+                  if (k === 'VENCIDO') return '#EF4444';
+                  return '#9CA3AF';
+                }}
+                onSliceClick={(label) => {
+                  setDrilldownStatus(label);
+                  setDrilldownState(null);
+                  setDrilldownModel(null);
+                }}
+              />
+            ),
+          },
+        ]}
+      />
 
-      {/* LINE + LEGEND */}
+      {/* LINE + LEGEND (también filtrado) */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         <div className="lg:col-span-8 bg-white p-6 rounded shadow border border-gray-200">
           <h3 className="font-bold text-gray-700 mb-4">Próximos Vencimientos</h3>
@@ -417,10 +515,10 @@ const RenewalsDashboard = () => {
         </div>
       </div>
 
-      {/* TABLECARD: dataset completo + TableCard pagina internamente */}
+      {/* TABLECARD */}
       <TableCard
         title="Listado de Renovaciones"
-        data={dataWithStatusLabel}
+        data={filteredByControls}
         columns={[
           {
             header: 'Dispositivo',
@@ -434,7 +532,6 @@ const RenewalsDashboard = () => {
           },
           { header: 'Modelo', accessor: 'real_model_name' },
           { header: 'F. Renovación', accessor: 'date_to_renew' },
-          // accessor REAL para filtrar por label (no por render)
           { header: 'Estado', accessor: 'status_label', render: (r) => getStatusBadge(r.date_to_renew) },
         ]}
         loading={loading}

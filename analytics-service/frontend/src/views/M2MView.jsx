@@ -125,7 +125,7 @@ const M2MView = () => {
       .sort((a, b) => b.value - a.value);
   };
 
-  // ✅ Charts también desde filteredByControls (como DevicesView)
+  // Charts también desde filteredByControls (como DevicesView)
   const statusStats = useMemo(() => getGroupStats(filteredByControls, 'status_clean'), [filteredByControls]);
   const networkStats = useMemo(() => getGroupStats(filteredByControls, 'network_type'), [filteredByControls]);
   const countryStats = useMemo(() => getGroupStats(filteredByControls, 'country_code'), [filteredByControls]);
@@ -287,20 +287,21 @@ const M2MView = () => {
             ),
           },
           {
-            id: 'pie-country',
+            id: 'bar-country',
             title: 'Distribución Geográfica',
             defaultMode: 'show',
             render: () => (
-              <PieChartCard
+              <BarChartCard
                 title="🌍 Distribución Geográfica"
-                legendTitle="Países visibles"
+                subtitle="Países visibles"
                 data={countryStats}
                 labelKey="name"
                 valueKey="value"
-                heightClass="h-72"
+                indexAxis='x'
+                showLegend= {true}
                 selectedLabel={drilldownCountry}
                 getColor={(i) => getConsistentColor(i)}
-                onSliceClick={(label) => {
+                onBarClick={(label) => {
                   setDrilldownCountry(label);
                   setDrilldownStatus(null);
                   setDrilldownNetwork(null);
@@ -406,9 +407,65 @@ const M2MView = () => {
           { header: 'País', accessor: 'country_code' },
           { header: 'Plan', accessor: 'rate_plan' },
           {
-            header: 'Mes (MB)',
-            accessor: 'cons_month_mb',
-            render: (r) => (typeof r.cons_month_mb === 'number' ? r.cons_month_mb.toFixed(2) : ''),
+            header: 'Mes (MB)', 
+            accessor: 'cons_month_mb', 
+            render: (r) => {
+
+              const val = Number(r.cons_month_mb) || 0;
+              
+              let planName = (r.rate_plan || '').toLowerCase();
+              planName = planName.replace(/m2m/g, '').replace(/b2b/g, '');
+
+              let limit = 0;
+
+              const matchGB = planName.match(/\b(\d+)\s*gb/);
+              
+              if (matchGB) {
+                limit = parseInt(matchGB[1]) * 1024;
+              } 
+              // B) Detectar MB explícitos (ej: "500MB")
+              else {
+                const matchMB = planName.match(/\b(\d+)\s*mb/);
+                if (matchMB) {
+                  limit = parseInt(matchMB[1]);
+                } 
+                // C) Detectar número suelto al final o entre espacios (ej: "Plan 500")
+                // \b(\d+)\b significa: un número que tiene espacios o signos de puntuación a los lados
+                // Esto ignora "4G", "3G", etc.
+                else {
+                  const matchNum = planName.match(/\b(\d{2,})\b/); // Buscamos preferiblemente de 2 digitos o mas (para evitar un "1" o "2" suelto que no sea cuota)
+                  if (matchNum) {
+                    limit = parseInt(matchNum[1]);
+                  }
+                }
+              }
+
+              // 3. LOGICA DE COLORES
+              let colorClass = 'text-gray-600'; 
+              let percent = 0;
+
+              if (limit > 0) {
+                percent = (val / limit) * 100;
+                if (percent >= 100) colorClass = 'text-red-700 font-extrabold';
+                else if (percent >= 90) colorClass = 'text-red-500 font-bold';
+                else if (percent >= 75) colorClass = 'text-orange-500 font-medium';
+                else if (percent >   0) colorClass = 'text-green-500';
+                else colorClass = 'text-yellow-600';
+              }
+
+              return (
+                <div className="flex flex-col">
+                  <span className={`${colorClass} tabular-nums`}>
+                    {val.toFixed(2)}
+                  </span>
+                  {limit > 0 && (
+                    <span className="text-[9px] text-gray-400">
+                      {Math.round(percent)}% de {limit < 1024 ? limit + 'MB' : (limit/1024) + 'GB'}
+                    </span>
+                  )}
+                </div>
+              );
+            },
           },
         ]}
         loading={loading}

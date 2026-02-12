@@ -1,8 +1,6 @@
-// PoolView.jsx
 import React, { useEffect, useMemo, useState } from 'react';
-import { api } from '../services/api';
-import { Layers, Activity, Search, Loader2 } from 'lucide-react';
-
+import { api } from '../services/api'; // Asegúrate de que esta ruta sea correcta
+import { Layers, Activity, Search, Loader2, ChevronDown, ChevronRight } from 'lucide-react';
 import TableCard from '../components/TableCard';
 import SelectDash from '../components/SelectDash';
 
@@ -31,19 +29,199 @@ import {
   Cell,
 } from 'recharts';
 
+// Registro de ChartJS
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Title, ChartTooltip, ChartLegend, Filler);
 
+// --- UTILIDADES DE COLOR Y ESTADO (Unificadas) ---
+
+// Devuelve configuración de color basada en el porcentaje
+const getStatusConfig = (percent) => {
+  // CRÍTICO (> 90%)
+  if (percent > 90) return { hex: '#ba0c0c', tailwind: 'text-red-600 font-extrabold', label: 'Crítico' };
+  
+  // ADVERTENCIA (75% - 90%)
+  if (percent > 65) return { hex: '#f72424', tailwind: 'text-red-500 font-bold', label: 'Alto' };
+  
+  // PRECAUCIÓN (50% - 75%)
+  if (percent > 50) return { hex: '#f97316', tailwind: 'text-orange-600 font-bold', label: 'Medio' };
+
+   if (percent === 0) return { hex: '#eab308', tailwind: 'text-yellow-600 font-medium', label: 'Medio' };
+  
+  // NORMAL (< 50%)
+  return { hex: '#0dbb0e', tailwind: 'text-green-600', label: 'Normal' };
+};
+
+// Wrapper para compatibilidad con las gráficas antiguas que solo esperan HEX
+const getBarColor = (percent) => getStatusConfig(percent).hex;
+
+// Función auxiliar para procesar datos de SIM (Extraída para evitar recreación)
+const processSimData = (s) => {
+  const val = Number(s.cons_month_mb) || 0;
+  let planName = (s.rate_plan || '').toLowerCase();
+  
+  // 1. Limpieza
+  planName = planName.replace(/m2m/g, '').replace(/b2b/g, '');
+
+  // 2. Detección de límite
+  let limit = 0;
+  const matchGB = planName.match(/\b(\d+)\s*gb/);
+  
+  if (matchGB) {
+    limit = parseInt(matchGB[1]) * 1024;
+  } else {
+    const matchMB = planName.match(/\b(\d+)\s*mb/);
+    if (matchMB) {
+      limit = parseInt(matchMB[1]);
+    } else {
+      const matchNum = planName.match(/\b(\d{2,})\b/); 
+      if (matchNum) limit = parseInt(matchNum[1]);
+    }
+  }
+
+  // 3. Lógica de colores y porcentajes
+  let percent = 0;
+  let status = { tailwind: 'text-gray-600', hex: '#9ca3af' };
+
+  if (limit > 0) {
+    percent = (val / limit) * 100;
+    status = getStatusConfig(percent);
+  }
+
+  return { 
+    ...s, 
+    val, 
+    limit, 
+    percent, 
+    colorClass: status.tailwind, // Clase de texto para la lista
+    barColor: status.hex         // Color hex por si se quisiera usar en barras mini
+  };
+};
+
+// --- COMPONENTE ORG LEGEND ---
+const OrgLegend = ({ orgRows, expandedOrg, setExpandedOrg }) => {
+  const [filterText, setFilterText] = useState('');
+
+  return (
+    <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-200 h-[600px] overflow-hidden flex flex-col">
+      <div className="flex flex-col gap-2 mb-2 pb-2 border-b">
+        <div className="flex items-center justify-between">
+          <h4 className="text-sm font-bold text-blue-700">Organizaciones</h4>
+          <span className="text-[11px] text-gray-400">{orgRows.length}</span>
+        </div>
+        
+        {/* INPUT DE BÚSQUEDA */}
+        <div className="relative">
+          <input
+            type="text"
+            placeholder="Filtrar por ICC o Nombre..."
+            value={filterText}
+            onChange={(e) => setFilterText(e.target.value)}
+            className="w-full pl-7 pr-2 py-1 text-xs border border-gray-300 rounded focus:outline-none focus:border-blue-500"
+          />
+          <Search size={12} className="absolute left-2 top-1.5 text-gray-400" />
+        </div>
+      </div>
+
+      <div className="overflow-y-auto pr-1">
+        {orgRows.map((row) => {
+          const open = String(expandedOrg) === String(row.commercialGroup);
+          
+          // Procesamos las SIMs
+          const processedSims = row.sims.map(processSimData);
+
+          // Filtramos
+          const filteredSims = processedSims.filter(s => {
+            if (!filterText) return true;
+            const term = filterText.toLowerCase();
+            return (
+              (s.icc || '').toLowerCase().includes(term) ||
+              (s.label || '').toLowerCase().includes(term)
+            );
+          });
+
+          // Ordenar por consumo descendente
+          const sortedSims = filteredSims.sort((a, b) => b.val - a.val);
+
+          // Si hay filtro activo y no hay resultados en este grupo, no renderizamos
+          if (filterText && sortedSims.length === 0) return null;
+
+          return (
+            <div key={row.commercialGroup} className="border border-gray-100 rounded mb-2 overflow-hidden">
+              <button
+                type="button"
+                onClick={() => setExpandedOrg(open ? null : row.commercialGroup)}
+                className={`w-full flex items-center justify-between px-3 py-2 text-left transition-colors ${
+                  open ? 'bg-blue-50' : 'hover:bg-gray-50'
+                }`}
+                title={row.commercialGroup}
+              >
+                <div className="flex items-center gap-2 min-w-0">
+                  {open ? <ChevronDown size={14} className="text-blue-600" /> : <ChevronRight size={14} className="text-gray-400" />}
+                  <span className="text-xs font-bold text-gray-700 truncate">{row.commercialGroup}</span>
+                </div>
+
+                <div className="flex items-center gap-2 flex-shrink-0">
+                  <span className="text-[11px] bg-gray-100 text-gray-700 px-2 py-0.5 rounded font-bold">
+                    {filterText ? sortedSims.length : row.simsCount} SIMs
+                  </span>
+                </div>
+              </button>
+
+              {open && (
+                <div className="bg-white border-t border-gray-100 px-3 py-2">
+                  {sortedSims.length === 0 ? (
+                    <div className="text-xs text-gray-400 py-1">Sin SIMs asociadas</div>
+                  ) : (
+                    <ul className="space-y-1 max-h-[320px] overflow-y-auto pr-1">
+                      {sortedSims.map((s) => (
+                        <li key={s._key} className="flex items-center justify-between gap-2 text-xs py-1 border-b border-gray-50 last:border-0">
+                          <span className="truncate text-gray-700" title={s.label}>
+                            {s.label}
+                          </span>
+                          
+                          {/* Renderizado del valor calculado */}
+                          <div className="flex flex-col text-right">
+                            <span className={`${s.colorClass} tabular-nums`}>
+                              {s.val.toFixed(2)} MB
+                            </span>
+                            {s.limit > 0 && (
+                              <span className="text-[9px] text-gray-400">
+                                {Math.round(s.percent)}% de {s.limit < 1024 ? s.limit + 'MB' : (s.limit/1024) + 'GB'}
+                              </span>
+                            )}
+                          </div>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+};
+
+// ---------------------------------------------
+
 const PoolView = () => {
-  const [rawData, setRawData] = useState([]);
+  const [rawPools, setRawPools] = useState([]);
+  const [chartLimit, setChartLimit] = useState(10);
+  const [rawM2M, setRawM2M] = useState([]);
   const [loading, setLoading] = useState(true);
 
   // Filtro externo
   const [selectedOrg, setSelectedOrg] = useState('ALL');
 
-  // ✅ Drilldown: organización seleccionada desde barras
-  const [drillOrg, setDrillOrg] = useState(null);
+  // Drilldown desde barras
+  const [drillOrganization, setDrillOrganization] = useState(null);
 
-  // TableCard (toolbar + paginación externa)
+  // Leyenda lateral
+  const [expandedOrg, setExpandedOrg] = useState(null);
+
+  // TableCard
   const [searchTerm, setSearchTerm] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const [rowsPerPage, setRowsPerPage] = useState(10);
@@ -53,18 +231,19 @@ const PoolView = () => {
   const [historyData, setHistoryData] = useState({ labels: [], datasets: [] });
 
   useEffect(() => {
-    const fetch = async () => {
+    const fetchAll = async () => {
       setLoading(true);
       try {
-        const res = await api.getPool(1, 5000);
-        setRawData(Array.isArray(res) ? res : res?.items || []);
-      } catch (error) {
-        console.error('Error fetching pools:', error);
+        const [poolsRes, m2mRes] = await Promise.all([api.getPool(1, 5000), api.getM2M(1, 5000)]);
+        setRawPools(Array.isArray(poolsRes) ? poolsRes : poolsRes?.items || []);
+        setRawM2M(Array.isArray(m2mRes) ? m2mRes : m2mRes?.items || []);
+      } catch (e) {
+        console.error('Error fetching pools/m2m:', e);
       } finally {
         setLoading(false);
       }
     };
-    fetch();
+    fetchAll();
   }, []);
 
   const formatBytes = (bytes, decimals = 2) => {
@@ -77,44 +256,72 @@ const PoolView = () => {
     return `${parseFloat((b / Math.pow(k, i)).toFixed(dm))} ${sizes[i]}`;
   };
 
+  const m2mWithPoolId = useMemo(() => {
+    return (rawM2M || []).map((sim, idx) => {
+      const commercialGroupID = sim.commercialGroupID ?? sim.commercialGroupId ?? sim.commercial_group_id ?? null;
+      return {
+        ...sim,
+        commercialGroupID,
+        pool_id: commercialGroupID != null ? String(commercialGroupID) : null,
+        _key: sim.uuid || sim.icc || `${idx}`,
+      };
+    });
+  }, [rawM2M]);
+
   const uniqueOrgs = useMemo(() => {
-    const orgs = [...new Set(rawData.map((item) => item.commercialGroup))];
+    const orgs = [...new Set(rawPools.map((p) => p.commercialGroup))];
     return orgs.filter(Boolean).sort();
-  }, [rawData]);
+  }, [rawPools]);
 
-  // 1) Filtro externo por organización (select)
   const filteredByOrg = useMemo(() => {
-    if (selectedOrg === 'ALL') return rawData;
-    return rawData.filter((item) => item.commercialGroup === selectedOrg);
-  }, [rawData, selectedOrg]);
+    if (selectedOrg === 'ALL') return rawPools;
+    return rawPools.filter((p) => String(p.commercialGroup) === String(selectedOrg));
+  }, [rawPools, selectedOrg]);
 
-  // 2) Enriquecer con status_label (para TableCard)
-  const dataWithLabels = useMemo(() => {
+  // Enriquecer pools con status_label usando la configuración unificada
+  const poolsWithLabels = useMemo(() => {
     return filteredByOrg.map((r) => {
       const p = Number(r.usage_percent) || 0;
-      let status_label = 'Normal';
-      if (p > 90) status_label = 'Crítico';
-      else if (p > 75) status_label = 'Alto';
-      return { ...r, status_label };
+      const config = getStatusConfig(p);
+      return { ...r, status_label: config.label };
     });
   }, [filteredByOrg]);
 
-  // 3) ✅ Drilldown por organización (desde barras) -> dataset FINAL
   const filteredByControls = useMemo(() => {
-    let data = dataWithLabels;
-    if (drillOrg) data = data.filter((r) => String(r.commercialGroup) === String(drillOrg));
-    return data;
-  }, [dataWithLabels, drillOrg]);
+    let data = poolsWithLabels;
+    
+    // 1. Filtrar por Drilldown de gráfica
+    if (drillOrganization) {
+      data = data.filter((p) => String(p.commercialGroup) === String(drillOrganization));
+    }
 
-  // Reset de página al cambiar filtros/inputs
+    // 2. Filtrar por Búsqueda de Texto (Tabla)
+    if (searchTerm) {
+        const lowerTerm = searchTerm.toLowerCase();
+        data = data.filter(p => 
+            String(p.pool_id || '').toLowerCase().includes(lowerTerm) ||
+            String(p.commercialGroup || '').toLowerCase().includes(lowerTerm) ||
+            String(p.status_label || '').toLowerCase().includes(lowerTerm)
+        );
+    }
+
+    return data;
+  }, [poolsWithLabels, drillOrganization, searchTerm]);
+
+  // Resetear página al cambiar filtros
   useEffect(() => {
     setCurrentPage(1);
-  }, [selectedOrg, drillOrg, rowsPerPage, searchTerm]);
+  }, [selectedOrg, drillOrganization, rowsPerPage, searchTerm]);
 
+  // --- LÓGICA DE PAGINACIÓN PARA LA TABLA ---
   const totalItems = filteredByControls.length;
   const totalPages = Math.max(1, Math.ceil(totalItems / rowsPerPage));
+  
+  const paginatedData = useMemo(() => {
+    const startIndex = (currentPage - 1) * rowsPerPage;
+    return filteredByControls.slice(startIndex, startIndex + rowsPerPage);
+  }, [filteredByControls, currentPage, rowsPerPage]);
 
-  // KPIs (sobre dataset FINAL)
   const stats = useMemo(() => {
     return filteredByControls.reduce(
       (acc, curr) => ({
@@ -127,59 +334,108 @@ const PoolView = () => {
     );
   }, [filteredByControls]);
 
-  // ✅ chartData agregado por commercialGroup (Top 20 por consumo)
   const chartData = useMemo(() => {
-    const map = new Map();
-
-    for (const item of dataWithLabels) {
-      const org = item.commercialGroup || 'N/A';
-      const consumed = Number(item.bytes_consumed) || 0;
-      const limit = Number(item.bytes_limit) || 0;
-      const percent = Number(item.usage_percent) || 0;
-
-      const prev = map.get(org) || { org, bytes_consumed: 0, bytes_limit: 0, percentMax: 0 };
-      prev.bytes_consumed += consumed;
-      prev.bytes_limit += limit;
-      prev.percentMax = Math.max(prev.percentMax, percent); // para colorear si algún pool está crítico
-      map.set(org, prev);
-    }
-
-    return Array.from(map.values())
-      .map((x) => ({
-        org: x.org,
-        Consumo: Number((x.bytes_consumed / 1024 ** 3).toFixed(2)),
-        Limite: Number((x.bytes_limit / 1024 ** 3).toFixed(2)),
-        percentMax: x.percentMax,
+    return poolsWithLabels
+      .map((item) => ({
+        pool_id: item.pool_id,
+        name: String(item.commercialGroup ?? 'N/A'),
+        commercialGroup: item.commercialGroup || 'N/A',
+        Consumo: Number(((Number(item.bytes_consumed) || 0) / 1024 ** 3).toFixed(2)),
+        Limite: Number(((Number(item.bytes_limit) || 0) / 1024 ** 3).toFixed(2)),
+        percent: Number(item.usage_percent) || 0,
       }))
       .sort((a, b) => b.Consumo - a.Consumo)
-      .slice(0, 20);
-  }, [dataWithLabels]);
+      .slice(0, chartLimit);
+  }, [poolsWithLabels, chartLimit]);
 
-  // ✅ Click en barras (Recharts) -> filtro por organización
-  const handleBarClick = (payload) => {
-    const org = payload?.org;
-    if (!org) return;
-    setDrillOrg((prev) => (String(prev) === String(org) ? null : org));
+  const tooltipContent = ({ active, payload }) => {
+    if (!active || !payload?.length) return null;
+    const row = payload[0]?.payload;
+    if (!row) return null;
+    return (
+      <div className="bg-white border border-gray-200 rounded shadow px-3 py-2 text-xs z-50">
+        <div className="font-bold text-blue-700 mb-1">{row.commercialGroup}</div>
+        <div className="text-gray-500">Pool: <span className="font-mono">{row.pool_id}</span></div>
+        <div className="mt-1 space-y-0.5">
+          {payload.map((p, i) => (
+            <div key={i} className="flex justify-between gap-4">
+              <span className="text-gray-600">{p.name}</span>
+              <span className="font-bold text-gray-800">{p.value} GB</span>
+            </div>
+          ))}
+          <div className="pt-1 border-t mt-1 text-gray-400 text-[10px]">
+            Uso: {row.percent.toFixed(2)}%
+          </div>
+        </div>
+      </div>
+    );
   };
 
-  const hasActiveFilter = Boolean(drillOrg);
+  const handleBarClick = (payload) => {
+    const org = payload?.commercialGroup;
+    if (!org) return;
+    setDrillOrganization((prev) => (String(prev) === String(org) ? null : org));
+    setExpandedOrg((prev) => (String(prev) === String(org) ? prev : org)); 
+  };
 
-  // Histórico (mock) basado en dataset FINAL
+  const hasActiveFilter = Boolean(drillOrganization);
+
+  const orgLegendRows = useMemo(() => {
+    const poolIdToOrg = new Map();
+    (rawPools || []).forEach((p) => {
+      const pid = p.pool_id != null ? String(p.pool_id) : null;
+      if (!pid) return;
+      poolIdToOrg.set(pid, p.commercialGroup || 'N/A');
+    });
+
+    const simsByOrg = new Map();
+    m2mWithPoolId.forEach((sim) => {
+      const pid = sim.pool_id != null ? String(sim.pool_id) : null;
+      if (!pid) return;
+      const orgName = poolIdToOrg.get(pid) || sim.organization || sim.commercialGroup || 'N/A';
+
+      if (!simsByOrg.has(orgName)) simsByOrg.set(orgName, []);
+      simsByOrg.get(orgName).push({
+        _key: sim._key,
+        icc: sim.icc,
+        label: sim.name || sim.sim_name || sim.icc || 'SIM',
+        cons_month_mb: sim.cons_month_mb,
+        rate_plan: sim.rate_plan,
+      });
+    });
+
+    const allowOrg = (orgName) => {
+      if (selectedOrg !== 'ALL' && String(orgName) !== String(selectedOrg)) return false;
+      if (drillOrganization && String(orgName) !== String(drillOrganization)) return false;
+      return true;
+    };
+
+    return [...simsByOrg.entries()]
+      .filter(([orgName]) => allowOrg(orgName))
+      .map(([orgName, sims]) => ({
+        commercialGroup: orgName,
+        simsCount: sims.length,
+        sims: sims, 
+      }))
+      .sort((a, b) => b.simsCount - a.simsCount);
+  }, [rawPools, m2mWithPoolId, selectedOrg, drillOrganization]);
+
+  // Histórico (mock)
   useEffect(() => {
     if (loading) return;
-
-    const currentTotalGB =
-      filteredByControls.reduce((acc, item) => acc + (Number(item.bytes_consumed) || 0), 0) / 1024 ** 3;
+    // Usamos filteredByControls para que la gráfica de tendencia reaccione a los filtros
+    const currentTotalGB = filteredByControls.reduce((acc, item) => acc + (Number(item.bytes_consumed) || 0), 0) / 1024 ** 3;
 
     let labels = [];
     let dataPoints = [];
 
+    // Mock data lógico basado en el total actual
     if (timeRange === 'mensual') {
       labels = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun'];
-      dataPoints = labels.map((_, i) => Number((currentTotalGB * (0.5 + 0.1 * i)).toFixed(2)));
+      dataPoints = labels.map((_, i) => Number((currentTotalGB * (0.5 + (Math.random() * 0.5))).toFixed(2)));
     } else {
       labels = ['Semana 1', 'Semana 2', 'Semana 3', 'Semana 4'];
-      dataPoints = labels.map((_, i) => Number((currentTotalGB * (0.8 + 0.05 * i)).toFixed(2)));
+      dataPoints = labels.map((_, i) => Number((currentTotalGB * (0.8 + (Math.random() * 0.2))).toFixed(2)));
     }
 
     setHistoryData({
@@ -199,7 +455,7 @@ const PoolView = () => {
         },
       ],
     });
-  }, [filteredByControls, timeRange, loading]);
+  }, [filteredByControls, timeRange, loading]); // Dependencia correcta
 
   const lineOptions = {
     responsive: true,
@@ -226,7 +482,7 @@ const PoolView = () => {
           <h2 className="text-lg font-bold text-gray-700">Monitor de Pools de Datos</h2>
           {hasActiveFilter && (
             <span className="ml-2 text-xs font-bold bg-blue-50 text-blue-700 border border-blue-100 px-2 py-1 rounded">
-              Org: {drillOrg}
+              Organización: {drillOrganization}
             </span>
           )}
         </div>
@@ -238,7 +494,8 @@ const PoolView = () => {
               value={selectedOrg}
               onChange={(e) => {
                 setSelectedOrg(e.target.value);
-                setDrillOrg(null);
+                setDrillOrganization(null);
+                setExpandedOrg(null);
               }}
               className="block w-full md:w-64 pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-md border"
             >
@@ -253,7 +510,10 @@ const PoolView = () => {
 
           {hasActiveFilter && (
             <button
-              onClick={() => setDrillOrg(null)}
+              onClick={() => {
+                setDrillOrganization(null);
+                setExpandedOrg(null);
+              }}
               className="px-3 py-2 text-xs font-bold bg-red-100 text-red-700 border border-red-200 rounded hover:bg-red-200 transition-colors"
             >
               Limpiar filtro
@@ -282,81 +542,133 @@ const PoolView = () => {
         <div className="bg-white p-6 rounded-lg shadow-sm border-l-4 border-orange-500">
           <p className="text-sm text-gray-500 font-medium">Límite Contratado</p>
           <p className="text-2xl font-bold text-gray-800">{formatBytes(stats.limit)}</p>
-          <p className="text-xs text-orange-600 mt-1">
-            Espacio libre: {formatBytes(Math.max(0, stats.limit - stats.consumed))}
-          </p>
+          <p className="text-xs text-orange-600 mt-1">Espacio libre: {formatBytes(Math.max(0, stats.limit - stats.consumed))}</p>
         </div>
       </div>
 
-      {/* SECCIONES */}
       <SelectDash
         storageKey="PoolView:sections"
         headerTitle="Visualizaciones"
         sections={[
           {
-            id: 'ConsumoVsLimite',
+            id: 'Consumo vs Límite',
             title: 'Gráfica Consumo vs Límite',
             defaultMode: 'show',
             render: () => (
-              <div className="bg-white p-6 rounded-lg shadow-sm h-[500px]">
-                <h3 className="text-lg font-bold text-gray-700 mb-2">Consumo vs Límite (Top 20 Orgs - GB)</h3>
-                <p className="text-xs text-gray-400 mb-4">Clic en una barra para filtrar KPIs + Tabla por organización</p>
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 w-full">
+                {/* CHART */}
+                <div className="lg:col-span-9 bg-white p-6 rounded-lg shadow-md h-[600px]">
+                  <div className="flex justify-between items-start mb-4">
+                    <div>
+                      <h3 className="text-lg font-bold text-gray-700">
+                        Consumo vs Límite (Top {chartLimit})
+                      </h3>
+                      <div className="flex flex-wrap items-center gap-3 mt-2 text-[10px] text-gray-500 font-medium">
+                        <div className="flex items-center gap-1">
+                          <span className="w-2.5 h-2.5 rounded-full bg-[#0dbb0e]"></span>
+                          <span>Normal (&lt;50%)</span>
+                        </div>
+                        <div className="flex items-center gap-1">
+                          <span className="w-2.5 h-2.5 rounded-full bg-[#f97316]"></span>
+                          <span>Medio (50-75%)</span>
+                        </div>
+                        <div className="flex items-center gap-1">
+                          <span className="w-2.5 h-2.5 rounded-full bg-[#f72424]"></span>
+                          <span>Alto (75-90%)</span>
+                        </div>
+                        <div className="flex items-center gap-1">
+                          <span className="w-2.5 h-2.5 rounded-full bg-[#ba0c0c]"></span>
+                          <span>Crítico (&gt;90%)</span>
+                        </div>
+                      </div>
+                      <p className="text-xs text-gray-400 mt-1">
+                        Clic en una barra para filtrar por Organización
+                      </p>
+                    </div>
 
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={chartData} margin={{ top: 20, right: 30, left: 20, bottom: 120 }}>
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                    <XAxis dataKey="org" tick={{ fontSize: 12 }} interval={0} angle={-45} textAnchor="end" height={80} />
-                    <YAxis />
-                    {/* Tooltip: label = ORGANIZACIÓN */}
-                    <Tooltip
-                      labelFormatter={(label) => `Organización: ${label}`}
-                      formatter={(value, name) => [`${value} GB`, name]}
-                      labelStyle={{ color: '#6366f1', fontWeight: 700 }}
-                    />
-                    <Legend verticalAlign="top" height={36} />
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-gray-500 font-medium">Mostrar:</span>
+                      <select
+                        value={chartLimit}
+                        onChange={(e) => setChartLimit(Number(e.target.value))}
+                        className="text-xs border border-gray-300 rounded px-2 py-1 focus:outline-none focus:border-blue-500 bg-white text-gray-700"
+                      >
+                        <option value={5}>Top 5</option>
+                        <option value={10}>Top 10</option>
+                        <option value={20}>Top 20</option>
+                        <option value={50}>Top 50</option>
+                        <option value={100}>Top 100</option>
+                      </select>
+                    </div>
+                  </div>
+                  
+                  
+                  <ResponsiveContainer width="100%" height="85%">
+                    <BarChart data={chartData} margin={{ top: 20, right: 30, left: 20, bottom: 80 }}>
+                      <defs>
+                      <linearGradient id="arcoiris" x1="0" y1="0" x2="1" y2="0">
+                        <stop offset="0%" stopColor="#ba0c0c" stopOpacity={1}/>
+                        <stop offset="25%" stopColor="#f72424" stopOpacity={1}/>
+                        <stop offset="50%" stopColor="#f97316" stopOpacity={1}/>
+                        <stop offset="75%" stopColor="#eab308" stopOpacity={1}/>
+                        <stop offset="100%" stopColor="#0dbb0e" stopOpacity={1}/>
+                      </linearGradient>
+                    </defs>
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                      <XAxis dataKey="name" tick={{ fontSize: 11 }} interval={0} angle={-20} textAnchor="end" height={80} />
+                      <YAxis />
+                      <Tooltip content={tooltipContent} />
+                      <Legend verticalAlign="top" height={36} />
 
-                    <Bar dataKey="Consumo" name="Consumo (GB)" radius={[4, 4, 0, 0]} onClick={handleBarClick}>
-                      {chartData.map((entry, index) => {
-                        const isSelected = drillOrg && String(drillOrg) === String(entry.org);
-                        const base = entry.percentMax > 90 ? '#ef4444' : '#6366f1';
-                        return (
-                          <Cell
-                            key={`c-${index}`}
-                            cursor="pointer"
-                            fill={base}
-                            opacity={isSelected ? 1 : hasActiveFilter ? 0.35 : 1}
-                          />
-                        );
-                      })}
-                    </Bar>
+                      <Bar dataKey="Consumo" name="Consumo (GB)" fill="url(#arcoiris)" radius={[4, 4, 0, 0]} onClick={handleBarClick}>
+                        {chartData.map((entry, index) => {
+                          const isSelected = drillOrganization && String(drillOrganization) === String(entry.commercialGroup);
+                          // Usar helper para color
+                          const base = getBarColor(entry.percent);
+                          return (
+                            <Cell
+                              key={`c-${index}`}
+                              cursor="pointer"
+                              fill={base}
+                              opacity={isSelected ? 1 : hasActiveFilter ? 0.35 : 1}
+                            />
+                          );
+                        })}
+                      </Bar>
 
-                    <Bar dataKey="Limite" name="Límite (GB)" radius={[4, 4, 0, 0]} onClick={handleBarClick}>
-                      {chartData.map((entry, index) => {
-                        const isSelected = drillOrg && String(drillOrg) === String(entry.org);
-                        return (
-                          <Cell
-                            key={`l-${index}`}
-                            cursor="pointer"
-                            fill="#6a6e73"
-                            opacity={isSelected ? 1 : hasActiveFilter ? 0.35 : 1}
-                          />
-                        );
-                      })}
-                    </Bar>
-                  </BarChart>
-                </ResponsiveContainer>
+                      <Bar dataKey="Limite" name="Límite (GB)" fill="#3e4143" radius={[4, 4, 0, 0]} onClick={handleBarClick}>
+                        {chartData.map((entry, index) => {
+                          const isSelected = drillOrganization && String(drillOrganization) === String(entry.commercialGroup);
+                          return (
+                            <Cell
+                              key={`l-${index}`}
+                              cursor="pointer"
+                              fill="#3e4143"
+                              opacity={isSelected ? 1 : hasActiveFilter ? 0.35 : 1}
+                            />
+                          );
+                        })}
+                      </Bar>
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+
+                {/* LEGEND / SIMS */}
+                <div className="lg:col-span-3 ">
+                  <OrgLegend orgRows={orgLegendRows} expandedOrg={expandedOrg} setExpandedOrg={setExpandedOrg} />
+                </div>
               </div>
             ),
           },
           {
             id: 'Tendencia',
-            title: 'Tendencia de Consumo (Mock)',
+            title: 'Tendencia de Consumo',
             defaultMode: 'show',
             render: () => (
               <div className="bg-white p-6 rounded shadow border border-gray-200 w-full flex flex-col h-[400px]">
                 <div className="flex justify-between items-center mb-4 border-b pb-2">
                   <h3 className="font-bold text-gray-700 flex items-center gap-2">
-                    <Activity size={18} className="text-blue-500" /> Tendencia de Consumo (Mock)
+                    <Activity size={18} className="text-blue-500" /> Tendencia de Consumo
                   </h3>
                   <div className="flex bg-gray-100 rounded p-1">
                     <button
@@ -389,7 +701,7 @@ const PoolView = () => {
       {/* TABLA */}
       <TableCard
         title="Pools"
-        data={filteredByControls} // ✅ filtrada por organización
+        data={filteredByControls} 
         columns={[
           { header: 'Pool ID', accessor: 'pool_id', render: (r) => <span className="font-mono font-bold text-blue-700 text-xs">{r.pool_id}</span> },
           { header: 'Organización', accessor: 'commercialGroup', render: (r) => <span className="text-gray-600 font-medium">{r.commercialGroup}</span> },
@@ -407,22 +719,28 @@ const PoolView = () => {
           {
             header: 'Consumo',
             accessor: 'bytes_consumed',
-            render: (r) => (
-              <div className="w-32">
-                <div className="flex justify-between text-[10px] mb-1 text-gray-500">
-                  <span>{formatBytes(r.bytes_consumed)}</span>
-                  <span>{formatBytes(r.bytes_limit)}</span>
-                </div>
-                <div className="w-full h-1.5 bg-gray-100 rounded-full overflow-hidden">
-                  <div
-                    className={`h-full rounded-full ${
-                      (r.usage_percent || 0) > 90 ? 'bg-red-500' : (r.usage_percent || 0) > 75 ? 'bg-yellow-500' : 'bg-blue-500'
-                    }`}
-                    style={{ width: `${Math.min(r.usage_percent || 0, 100)}%` }}
-                  />
-                </div>
-              </div>
-            ),
+            render: (r) => {
+                const percent = r.usage_percent || 0;
+                // Obtenemos el color consistente con la gráfica
+                const colorHex = getBarColor(percent); 
+                return (
+                    <div className="w-32">
+                        <div className="flex justify-between text-[10px] mb-1 text-gray-500">
+                            <span>{formatBytes(r.bytes_consumed)}</span>
+                            <span>{formatBytes(r.bytes_limit)}</span>
+                        </div>
+                        <div className="w-full h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                            <div
+                                className="h-full rounded-full transition-all duration-500"
+                                style={{ 
+                                    width: `${Math.min(percent, 100)}%`,
+                                    backgroundColor: colorHex 
+                                }}
+                            />
+                        </div>
+                    </div>
+                );
+            },
           },
           {
             header: 'Estado',
@@ -432,10 +750,12 @@ const PoolView = () => {
               const label = r.status_label || 'Normal';
               let color = 'bg-green-100 text-green-800';
               if (label === 'Crítico') color = 'bg-red-100 text-red-800';
-              else if (label === 'Alto') color = 'bg-yellow-100 text-yellow-800';
+              else if (label === 'Alto') color = 'bg-orange-100 text-orange-800';
+              else if (label === 'Medio') color = 'bg-yellow-100 text-yellow-800';
+              
               return (
                 <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${color}`}>
-                  {label} ({p}%)
+                  {label} ({p.toFixed(1)}%)
                 </span>
               );
             },

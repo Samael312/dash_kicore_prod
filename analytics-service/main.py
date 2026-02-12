@@ -25,13 +25,13 @@ class HistoryRequest(BaseModel):
 # 2. DEFINICIÓN DEL LIFESPAN
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    print("🚀 Iniciando Analytics Service...")
+    print(" Iniciando Analytics Service...")
     if client.login():
-        print("✅ Conectado a Core API")
+        print(" Conectado a Core API")
     else:
-        print("⚠️ No se pudo loguear al inicio")
+        print(" No se pudo loguear al inicio")
     yield
-    print("🛑 Apagando servicio...")
+    print(" Apagando servicio...")
 
 app = FastAPI(lifespan=lifespan)
 

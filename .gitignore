@@ -1,3 +1,11 @@
+
+# IDEs
+.vscode/
+.idea/
+
+# Recursos
+resources/
+
 # Ignorar entorno virtual y cache de Python
 __pycache__/
 *.py[cod]
@@ -12,8 +20,12 @@ env/
 # Ignorar datos temporales
 *.csv
 *.xlsx
+*.xlsx#
 .ipynb_checkpoints/
 
 node_modules/
 package-lock.json
-package.json
+
+frontend/.vite
+
+scripts/alarms_cron.log

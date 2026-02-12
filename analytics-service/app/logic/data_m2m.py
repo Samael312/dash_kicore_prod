@@ -150,6 +150,11 @@ def process_m2m(json_data):
     col_alarms = df.get('alarms', pd.Series([None]*len(df)))
     df['alarm_count'] = col_alarms.apply(safe_json).apply(extract_alarm_count)
 
+    #9. commercialGroupId (ID de grupo comercial)
+    col_com = df.get('commercialGroupId', pd.Series([None]*len(df)))
+    df['commercialGroupId'] = col_com.fillna("N/A")
+    
+
     # ================================
     # LIMPIEZA FINAL
     # ================================
@@ -168,7 +173,8 @@ def process_m2m(json_data):
         'usage_tier_daily',
         'usage_tier_month',
         'cons_daily_readable',
-        'cons_month_readable'
+        'cons_month_readable',
+        'commercialGroupId'
     ]
     
     final_cols = [c for c in cols_to_keep if c in df.columns]

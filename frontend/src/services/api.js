@@ -1,7 +1,8 @@
 import axios from 'axios';
 
 // Asegúrate de que este puerto coincida con tu uvicorn.run (8000)
-const API_BASE = 'http://172.17.1.33:8000/internal/dashboard';
+// Usar variable de entorno de Vite o fallback al dominio con HTTPS (vía proxy Apache)
+const API_BASE = import.meta.env.VITE_API_BASE || 'https://metrics.kiconex.com/internal/dashboard';
 
 // Función genérica para reutilizar lógica
 const fetchEndpoint = async (endpoint, page, limit) => {

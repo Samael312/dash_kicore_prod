@@ -22,3 +22,7 @@ env/
 *.xlsx
 *.xlsx#
 .ipynb_checkpoints/
+
+frontend/.vite
+
+scripts/alarms_cron.log

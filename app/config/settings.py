@@ -11,6 +11,10 @@ class Settings:
     # Nuevo: Token de API estático (si se tiene) o desde el .env
     API_TOKEN = os.getenv("CORE_API_TOKEN", "3a50af52e02a7e757e1834d2a7af87e3") # Marcador de posición por defecto
     
+    # Cloud API Configuration
+    CLOUD_BASE_URL = "https://cloud.kiconex.com/api/v1"
+    CLOUD_API_TOKEN = "rGVCziLROFxEACbVmLWDfEgvdPsu5Gyi"
+
     DEFAULT_TENANT_UUID = "90be8c8a-f462-4a3e-afcf-d8f34094eaa8" 
 
     # ENDPOINTS

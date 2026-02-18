@@ -100,7 +100,7 @@ const App = () => {
             <div className="flex items-center">
               <div className="flex-shrink-0 flex items-center text-blue-600 font-bold text-xl tracking-tight mr-8">
                 <LayoutDashboard className="mr-2" size={24} />
-                Core Dashboard
+                Metrics Dashboard
               </div>
               
               {/* MENÚS DESPLEGABLES */}

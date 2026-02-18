@@ -14,9 +14,11 @@ from app.logic.data_info import process_devicesInfo
 from app.logic.data_m2m import process_m2m
 from app.logic.data_pool import process_pools
 from app.logic.data_renewal import process_renewals_logic
+from app.database import DatabaseAdapter
 
-# Instancia global del cliente
+# Instancia global del cliente y base de datos
 client = CoreClient()
+db = DatabaseAdapter()
 class HistoryRequest(BaseModel):
     start_date: str # Debería ser formato YYYY-MM-DD
     end_date: str   # Debería ser formato YYYY-MM-DD
@@ -270,6 +272,36 @@ def get_renewals_dashboard(
         print(f"❌ Error en Renewals: {e}")
         import traceback
         traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+# ==========================================
+# ENDPOINT 6: ALARM STATS
+# ==========================================
+@app.get("/internal/dashboard/alarms/stats")
+def get_alarm_stats():
+    try:
+        latest = db.get_latest_counts()
+        if not latest:
+            return {
+                "disconnected_device": 0,
+                "disconnected_control": 0,
+                "parameters": 0,
+                "sim_high": 0,
+                "sim_critical": 0,
+                "timestamp": None
+            }
+        return latest
+    except Exception as e:
+        print(f"❌ Error en Alarm Stats: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/internal/dashboard/alarms/history")
+def get_alarm_history(limit: int = 50):
+    try:
+        history = db.get_history_counts(limit)
+        return history
+    except Exception as e:
+        print(f"❌ Error en Alarm History: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 if __name__ == "__main__":

@@ -24,6 +24,24 @@ export const api = {
   getM2M: (page, limit) => fetchEndpoint('m2m', page, limit),
   getRenewals: (page, limit) => fetchEndpoint('renewals', page, limit),
   getPool: (page, limit) => fetchEndpoint('pools', page, limit),
+  getAlarmStats: async () => {
+    try {
+      const response = await axios.get(`${API_BASE}/alarms/stats`);
+      return response.data;
+    } catch (error) {
+      console.error("Error fetching alarm stats:", error);
+      return null;
+    }
+  },
+  getAlarmHistory: async (limit = 50) => {
+    try {
+      const response = await axios.get(`${API_BASE}/alarms/history`, { params: { limit } });
+      return response.data;
+    } catch (error) {
+      console.error("Error fetching alarm history:", error);
+      return [];
+    }
+  },
 
   // --- CORRECCIÓN ---
   getHistory: async (icc, payload) => {

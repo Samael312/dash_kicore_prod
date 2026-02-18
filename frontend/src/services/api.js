@@ -1,7 +1,7 @@
 import axios from 'axios';
 
 // Asegúrate de que este puerto coincida con tu uvicorn.run (8000)
-const API_BASE = 'http://localhost:8000/internal/dashboard';
+const API_BASE = 'http://172.17.1.33:8000/internal/dashboard';
 
 // Función genérica para reutilizar lógica
 const fetchEndpoint = async (endpoint, page, limit) => {

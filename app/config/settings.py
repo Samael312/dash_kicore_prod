@@ -8,12 +8,18 @@ load_dotenv()
 class Settings:
     BASE_URL = "https://core.kiconex.com/api"
     
-    # Nuevo: Token de API estático (si se tiene) o desde el .env
-    API_TOKEN = os.getenv("CORE_API_TOKEN", "3a50af52e02a7e757e1834d2a7af87e3") # Marcador de posición por defecto
+    # API Tokens
+    API_TOKEN = os.getenv("CORE_API_TOKEN")
+    CLOUD_API_TOKEN = os.getenv("CLOUD_API_TOKEN")
     
     # Cloud API Configuration
     CLOUD_BASE_URL = "https://cloud.kiconex.com/api/v1"
-    CLOUD_API_TOKEN = "rGVCziLROFxEACbVmLWDfEgvdPsu5Gyi"
+    
+    # Database Configuration
+    DB_HOST = os.getenv("DB_HOST", "localhost")
+    DB_NAME = os.getenv("DB_NAME", "metrics")
+    DB_USER = os.getenv("DB_USER")
+    DB_PASS = os.getenv("DB_PASS")
 
     DEFAULT_TENANT_UUID = "90be8c8a-f462-4a3e-afcf-d8f34094eaa8" 
 

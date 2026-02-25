@@ -178,6 +178,40 @@ const RenewalsDashboard = () => {
   const [drilldownModel, setDrilldownModel] = useState(null); // model_name
   const [drilldownStatus, setDrilldownStatus] = useState(null); // status_label
 
+  const normalizeRenewalsPayload = (payload) => {
+    const isObject = (v) => v && typeof v === 'object' && !Array.isArray(v);
+
+    const findRecordsArray = (node, depth = 0) => {
+      if (depth > 4 || node == null) return [];
+
+      if (Array.isArray(node)) {
+        if (node.length === 0) return [];
+
+        const hasObjectRows = node.some((item) => isObject(item));
+        if (hasObjectRows) return node;
+
+        return [];
+      }
+
+      if (!isObject(node)) return [];
+
+      const candidateKeys = ['items', 'data', 'content', 'results', 'records', 'rows', 'list'];
+      for (const key of candidateKeys) {
+        const found = findRecordsArray(node[key], depth + 1);
+        if (found.length > 0) return found;
+      }
+
+      for (const value of Object.values(node)) {
+        const found = findRecordsArray(value, depth + 1);
+        if (found.length > 0) return found;
+      }
+
+      return [];
+    };
+
+    return findRecordsArray(payload);
+  };
+
   useEffect(() => {
   const fetchData = async () => {
     setLoading(true);

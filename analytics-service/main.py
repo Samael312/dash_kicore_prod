@@ -233,28 +233,23 @@ def get_pools_dashboard(
 # ==========================================
 # ENDPOINT 5: RENEWALS
 # ==========================================
-@app.get("/internal/dashboard/renewals")
-def get_renewals_dashboard(
+@app.get("/internal/dashboard/renewals/m2m")
+def get_m2m_renewals_dashboard(
     limit: int = Query(5000, ge=1),
     offset: int = Query(0, ge=0),
     show_all: bool = Query(True),
     from_date: str = Query(None),
     to: str = Query(None),
     raw: bool = Query(False),
-    m2m: bool = Query(True),
-    plan: bool = Query(True),
 ):
     try:
         raw_m2m_ren = client.get_m2m_renewals(show_all=show_all, from_date=from_date, to=to)
-        raw_plan_ren = client.get_plan_renewals(show_all=show_all, from_date=from_date, to=to)
 
         if raw:
-            return {
-                "m2m_renewals": raw_m2m_ren if m2m else [],
-                "plan_renewals": raw_plan_ren if plan else [],
-            }
+            return {"m2m_renewals": raw_m2m_ren}
 
-        raw_m2m = client.get_m2m()  # <-- necesario para m2m_name por ICC
+        # Obtenemos las dependencias (necesitamos raw_m2m para el cruce por ICC)
+        raw_m2m = client.get_m2m() 
         raw_devices = client.get_devicesB()
         raw_models = client.get_deviceModels()
         raw_software = client.get_deviceSoftware()
@@ -265,27 +260,54 @@ def get_renewals_dashboard(
             raw_devices,
             raw_models,
             raw_software,
-        ) if m2m else []
+        )
+
+        # Paginación
+        m2m_pag = m2m_data[offset: offset + limit] if offset < len(m2m_data) else []
+
+        return {
+            "data": m2m_pag,
+            "total": len(m2m_data),
+            "all_data": m2m_data
+        }
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/internal/dashboard/renewals/plan")
+def get_plan_renewals_dashboard(
+    limit: int = Query(5000, ge=1),
+    offset: int = Query(0, ge=0),
+    show_all: bool = Query(True),
+    from_date: str = Query(None),
+    to: str = Query(None),
+    raw: bool = Query(False),
+):
+    try:
+        raw_plan_ren = client.get_plan_renewals(show_all=show_all, from_date=from_date, to=to)
+
+        if raw:
+            return {"plan_renewals": raw_plan_ren}
+
+        # Obtenemos las dependencias (NO necesitamos raw_m2m aquí)
+        raw_devices = client.get_devicesB()
+        raw_models = client.get_deviceModels()
+        raw_software = client.get_deviceSoftware()
 
         plan_data = process_plan_renewals_logic(
             raw_plan_ren,
             raw_devices,
             raw_models,
             raw_software,
-        ) if plan else []
+        )
 
-        # Paginación (si la quieres, que sea por separado)
-        m2m_pag = m2m_data[offset: offset + limit] if offset < len(m2m_data) else []
+        # Paginación
         plan_pag = plan_data[offset: offset + limit] if offset < len(plan_data) else []
 
-        combined_data = m2m_data + plan_data
-
         return {
-            "m2m": m2m_pag,
-            "plan": plan_pag,
-            "total_m2m": len(m2m_data),
-            "total_plan": len(plan_data),
-            "combined": combined_data
+            "data": plan_pag,
+            "total": len(plan_data),
+            "all_data": plan_data
         }
 
     except Exception as e:

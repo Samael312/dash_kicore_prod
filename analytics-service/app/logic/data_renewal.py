@@ -9,6 +9,8 @@ def _clean_uuid(series: pd.Series) -> pd.Series:
         return series
     return series.astype(str).str.strip().str.lower()
 
+
+
 def _clean_str(series: pd.Series) -> pd.Series:
     if series is None or series.empty:
         return series
@@ -31,8 +33,8 @@ def _status_label(val) -> str:
         "active": "Activa",
         "inactive": "Inactiva",
         "cancelled": "Cancelada",
-        "not-applicable": "No aplicable",
-        "not applicable": "No aplicable",
+        "not-applicable": "No Aplicable",
+        "not applicable": "No Aplicable",
         "unknown": "Desconocido",
         "desconocido": "Desconocido",
     }
@@ -120,13 +122,12 @@ def _enrich_devices_models(df_base: pd.DataFrame, raw_devices, raw_models, raw_s
         mask_still = df_devices["model_name"].isin(["Desconocido", None, np.nan])
         df_devices.loc[mask_still, "model_name"] = df_devices.loc[mask_still, "ssid"]
 
-   # Reemplaza las últimas líneas de _enrich_devices_models por esto:
+   
     cols_dev = ["uuid", "model_name", "final_client", "name", "organization"]
     cols_dev = [c for c in cols_dev if c in df_devices.columns]
 
     df_out = df_out.merge(df_devices[cols_dev], on="uuid", how="left", suffixes=("", "_device"))
 
-    # CORRECCIÓN DE FILLNA PARA EVITAR AttributeError
     if "model_name" not in df_out.columns:
         df_out["model_name"] = "Dispositivo no encontrado"
     else:
@@ -134,6 +135,8 @@ def _enrich_devices_models(df_base: pd.DataFrame, raw_devices, raw_models, raw_s
 
     if "final_client" not in df_out.columns:
         df_out["final_client"] = None
+    
+
 
     return df_out
 

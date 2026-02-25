@@ -22,20 +22,31 @@ export const api = {
   getKiwi: (page, limit) => fetchEndpoint('kiwi', page, limit),
   getInfo: (page, limit) => fetchEndpoint('info', page, limit),
   getM2M: (page, limit) => fetchEndpoint('m2m', page, limit),
- getRenewals: async (page, limit) => {
-    const response = await fetchEndpoint('renewals', page, limit);
-   
-    return response.combined || []; 
-  },
-  getM2MRenewals: (page, limit) => fetchEndpoint('m2m-subscriptions', page, limit),
-  getPlanRenewals: (page, limit) => fetchEndpoint('plan-subscriptions', page, limit),
   getPool: (page, limit) => fetchEndpoint('pools', page, limit),
 
-  // --- CORRECCIÓN ---
+  // --- NUEVA LÓGICA DE RENOVACIONES ---
+  getRenewals: async (page, limit) => {
+    try {
+      // Disparamos ambas peticiones en paralelo para que cargue el doble de rápido
+      const [m2mResponse, planResponse] = await Promise.all([
+        fetchEndpoint('renewals/m2m', page, limit),
+        fetchEndpoint('renewals/plan', page, limit)
+      ]);
+
+      const m2mArray = m2mResponse?.all_data || m2mResponse?.data || [];
+      const planArray = planResponse?.all_data || planResponse?.data || [];
+      return [...m2mArray, ...planArray];
+    } catch (error) {
+      console.error("Error al obtener las renovaciones combinadas:", error);
+      // Retornamos un array vacío en caso de error para que la UI no crashee
+      return []; 
+    }
+  },
+
+  // --- HISTÓRICO ---
   getHistory: async (icc, payload) => {
     try {
       const response = await axios.post(`${API_BASE}/m2m/${icc}/history`, payload);
-      
       return response.data;
     } catch (error) {
       console.error("Error en getHistory:", error);

@@ -67,8 +67,8 @@ const DeviceItem = ({ device }) => {
       >
         <Monitor size={12} className="text-gray-400" />
         <span className="truncate flex-grow">
-          <span className="font-medium text-gray-700">{device.name || 'Sin Nombre'}</span>
-          <span className="text-gray-400 ml-1 opacity-75">({device.real_model_name})</span>
+          <span className="font-medium text-gray-700">{device.name || device.m2m_name || 'Sin Nombre'}</span>
+          <span className="text-gray-400 ml-1 opacity-75">({device.model_name})</span>
         </span>
         {showUuid ? <ChevronDown size={12} className="text-blue-400" /> : <ChevronRight size={12} className="text-gray-300" />}
       </div>
@@ -158,9 +158,13 @@ const LegendBox = ({ data, title, subtitle }) => {
 };
 
 const RenewalsDashboard = () => {
-  const [rawData, setRawData] = useState([]);
+  const [rawM2M, setRawM2M] = useState([]);
+  const [rawPlan, setRawPlan] = useState([]);
   const [loading, setLoading] = useState(true);
 
+  
+
+  const [activeTab, setActiveTab] = useState('m2m');
   // TableCard control
   const [searchTerm, setSearchTerm] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
@@ -171,7 +175,7 @@ const RenewalsDashboard = () => {
 
   // ✅ drilldowns desde charts
   const [drilldownState, setDrilldownState] = useState(null); // ki_subscription_state
-  const [drilldownModel, setDrilldownModel] = useState(null); // real_model_name
+  const [drilldownModel, setDrilldownModel] = useState(null); // model_name
   const [drilldownStatus, setDrilldownStatus] = useState(null); // status_label
 
   const normalizeRenewalsPayload = (payload) => {
@@ -209,19 +213,24 @@ const RenewalsDashboard = () => {
   };
 
   useEffect(() => {
-    const fetchData = async () => {
-      setLoading(true);
-      try {
-        const res = await api.getRenewals(1, 5000);
-        setRawData(normalizeRenewalsPayload(res));
-      } catch (e) {
-        console.error('Error fetching data:', e);
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchData();
-  }, []);
+  const fetchData = async () => {
+    setLoading(true);
+    try {
+      const res = await api.getRenewals(1, 5000);
+
+      setRawM2M(Array.isArray(res?.m2m) ? res.m2m : []);
+      setRawPlan(Array.isArray(res?.plan) ? res.plan : []);
+    } catch (e) {
+      console.error('Error fetching renewals:', e);
+      setRawM2M([]);
+      setRawPlan([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  fetchData();
+}, []);
 
   const getStatusBadge = (dateStr) => {
     if (!dateStr) return <span className="px-2 py-1 bg-gray-100 text-gray-600 rounded-full text-xs font-bold">INDEFINIDO</span>;
@@ -245,27 +254,28 @@ const RenewalsDashboard = () => {
     );
   };
 
-  // ✅ status_label real para filtrar en tabla + pie
-  const dataWithStatusLabel = useMemo(() => {
-    const today = new Date();
-    return (rawData || []).map((r) => {
-      let status_label = 'ACTIVO';
-      if (!r.date_to_renew) status_label = 'INDEFINIDO';
-      else {
-        const diffDays = Math.ceil((new Date(r.date_to_renew) - today) / (1000 * 60 * 60 * 24));
-        if (diffDays < 0) status_label = 'VENCIDO';
-        else if (diffDays <= 30) status_label = 'POR VENCER';
-      }
-      return { ...r, status_label };
-    });
-  }, [rawData]);
+const currentData = activeTab === 'm2m' ? rawM2M : rawPlan;
+
+const dataWithStatusLabel = useMemo(() => {
+  const today = new Date();
+  return (currentData || []).map((r) => {
+    let status_label = 'ACTIVO';
+    if (!r.date_to_renew) status_label = 'INDEFINIDO';
+    else {
+      const diffDays = Math.ceil((new Date(r.date_to_renew) - today) / (1000 * 60 * 60 * 24));
+      if (diffDays < 0) status_label = 'VENCIDO';
+      else if (diffDays <= 30) status_label = 'POR VENCER';
+    }
+    return { ...r, status_label };
+  });
+}, [currentData]);
 
   // ✅ dataset base para tabla (aplica drilldowns; la búsqueda/paginación la hace TableCard)
   const filteredByControls = useMemo(() => {
     let data = dataWithStatusLabel;
 
     if (drilldownState) data = data.filter((d) => (d.ki_subscription_state || 'Sin Suscripción') === drilldownState);
-    if (drilldownModel) data = data.filter((d) => (d.real_model_name || d.model || 'Desconocido') === drilldownModel);
+    if (drilldownModel) data = data.filter((d) => (d.model_name || d.model || 'Desconocido') === drilldownModel);
     if (drilldownStatus) data = data.filter((d) => (d.status_label || 'INDEFINIDO') === drilldownStatus);
 
     return data;
@@ -304,7 +314,7 @@ const RenewalsDashboard = () => {
       const state = device.ki_subscription_state || 'Sin Suscripción';
       stateCount[state] = (stateCount[state] || 0) + 1;
 
-      const model = device.real_model_name || device.model || 'Desconocido';
+      const model = device.model_name || device.model || 'Desconocido';
       modelCount[model] = (modelCount[model] || 0) + 1;
 
       const status_label = device.status_label || 'INDEFINIDO';
@@ -323,9 +333,9 @@ const RenewalsDashboard = () => {
           renewalsTimeline[monthKey].count++;
           renewalsTimeline[monthKey].items.push({
             date: device.date_to_renew,
-            name: device.name,
+            name: device.name || device.m2m_name || 'Sin Nombre',
             uuid: device.uuid,
-            real_model_name: model,
+            model_name: model,
           });
         } else {
           stats.active++;
@@ -417,7 +427,9 @@ const RenewalsDashboard = () => {
   return (
     <div className="space-y-6 p-4 animate-fade-in pb-10">
       <div className="bg-white p-4 rounded shadow border border-gray-200 flex items-center justify-between gap-3">
-        <h2 className="text-2xl font-bold text-blue-900">📊 Dashboard de Renovaciones</h2>
+       <h2 className="text-2xl font-bold text-blue-900">
+        📊 Dashboard de Renovaciones {activeTab === 'm2m' ? 'M2M' : 'Plan'}
+      </h2>
 
         {hasActiveFilter && (
           <button
@@ -432,7 +444,29 @@ const RenewalsDashboard = () => {
           </button>
         )}
       </div>
+        <div className="flex gap-2 mb-6">
+        <button
+          onClick={() => setActiveTab('m2m')}
+          className={`px-4 py-2 rounded font-semibold border transition ${
+            activeTab === 'm2m'
+              ? 'bg-blue-600 text-white border-blue-600'
+              : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50'
+          }`}
+        >
+          🔵 M2M
+        </button>
 
+        <button
+          onClick={() => setActiveTab('plan')}
+          className={`px-4 py-2 rounded font-semibold border transition ${
+            activeTab === 'plan'
+              ? 'bg-purple-600 text-white border-purple-600'
+              : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50'
+          }`}
+        >
+          🟣 Plan
+        </button>
+      </div>
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <KPICard title="Total" value={processed.kpis.totalDevices} icon={<Server />} color="bg-blue-500" />
         <KPICard title="Activas" value={processed.kpis.active} icon={<CheckCircle />} color="bg-green-500" />
@@ -564,7 +598,7 @@ const RenewalsDashboard = () => {
               </div>
             ),
           },
-          { header: 'Modelo', accessor: 'real_model_name' },
+          { header: 'Modelo', accessor: 'model_name' },
           { header: 'F. Renovación', accessor: 'date_to_renew' },
           { header: 'Estado', accessor: 'status_label', render: (r) => getStatusBadge(r.date_to_renew) },
         ]}
@@ -573,7 +607,7 @@ const RenewalsDashboard = () => {
         searchTerm={searchTerm}
         setSearchTerm={setSearchTerm}
         searchPlaceholder="Buscar por nombre o UUID..."
-        searchableKeys={['name', 'uuid', 'real_model_name', 'status_label']}
+        searchableKeys={['name', 'uuid', 'model_name', 'status_label']}
         pageSize={rowsPerPage}
         setPageSize={setRowsPerPage}
         rowsPerPageOptions={[5, 10, 25, 50]}

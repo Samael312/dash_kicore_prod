@@ -2,7 +2,7 @@
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException, Query, Body
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel # <--- NECESARIO PARA EL BODY DEL POST
+from pydantic import BaseModel 
 import pandas as pd
 import numpy as np
 import math
@@ -13,14 +13,10 @@ from app.logic.data_device import prepare_boards, prepare_kiwi
 from app.logic.data_info import process_devicesInfo
 from app.logic.data_m2m import process_m2m
 from app.logic.data_pool import process_pools
-from app.logic.data_renewal import process_renewals_logic
+from app.logic.data_renewal import process_m2m_renewals_logic, process_plan_renewals_logic  
 
 # Instancia global del cliente
 client = CoreClient()
-class HistoryRequest(BaseModel):
-    start_date: str # Debería ser formato YYYY-MM-DD
-    end_date: str   # Debería ser formato YYYY-MM-DD
-    monthly: bool
 
 # 2. DEFINICIÓN DEL LIFESPAN
 @asynccontextmanager
@@ -243,37 +239,56 @@ def get_renewals_dashboard(
     offset: int = Query(0, ge=0),
     show_all: bool = Query(True),
     from_date: str = Query(None),
-    to: str = Query(None) 
+    to: str = Query(None),
+    raw: bool = Query(False),
+    m2m: bool = Query(True),
+    plan: bool = Query(True),
 ):
-    # A. Obtenemos datos crudos
-    raw_ren = client.get_deviceRenewals(show_all=show_all, from_date=from_date, to=to)
-    raw_devices = client.get_devicesB()
-    raw_models = client.get_deviceModels()
-    raw_software = client.get_deviceSoftware() 
-
     try:
-        # C. Procesamos con la nueva lógica (incluyendo software)
-        renewals_data = process_renewals_logic(
-            raw_ren, 
-            raw_devices, 
-            raw_models, 
-            raw_software 
-        )
-        
-        # D. Paginación manual sobre la lista resultante
-        total_items = len(renewals_data)
-        if offset >= total_items:
-             paginated_data = []
-        else:
-             end = offset + limit
-             paginated_data = renewals_data[offset:end]
-        
-        return paginated_data
+        raw_m2m_ren = client.get_m2m_renewals(show_all=show_all, from_date=from_date, to=to)
+        raw_plan_ren = client.get_plan_renewals(show_all=show_all, from_date=from_date, to=to)
+
+        if raw:
+            return {
+                "m2m_renewals": raw_m2m_ren if m2m else [],
+                "plan_renewals": raw_plan_ren if plan else [],
+            }
+
+        raw_m2m = client.get_m2m()  # <-- necesario para m2m_name por ICC
+        raw_devices = client.get_devicesB()
+        raw_models = client.get_deviceModels()
+        raw_software = client.get_deviceSoftware()
+
+        m2m_data = process_m2m_renewals_logic(
+            raw_m2m_ren,
+            raw_m2m,
+            raw_devices,
+            raw_models,
+            raw_software,
+        ) if m2m else []
+
+        plan_data = process_plan_renewals_logic(
+            raw_plan_ren,
+            raw_devices,
+            raw_models,
+            raw_software,
+        ) if plan else []
+
+        # Paginación (si la quieres, que sea por separado)
+        m2m_pag = m2m_data[offset: offset + limit] if offset < len(m2m_data) else []
+        plan_pag = plan_data[offset: offset + limit] if offset < len(plan_data) else []
+
+        combined_data = m2m_data + plan_data
+
+        return {
+            "m2m": m2m_pag,
+            "plan": plan_pag,
+            "total_m2m": len(m2m_data),
+            "total_plan": len(plan_data),
+            "combined": combined_data
+        }
 
     except Exception as e:
-        print(f"❌ Error en Renewals: {e}")
-        import traceback
-        traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
 
 if __name__ == "__main__":

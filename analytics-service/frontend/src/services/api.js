@@ -22,7 +22,13 @@ export const api = {
   getKiwi: (page, limit) => fetchEndpoint('kiwi', page, limit),
   getInfo: (page, limit) => fetchEndpoint('info', page, limit),
   getM2M: (page, limit) => fetchEndpoint('m2m', page, limit),
-  getRenewals: (page, limit) => fetchEndpoint('renewals', page, limit),
+ getRenewals: async (page, limit) => {
+    const response = await fetchEndpoint('renewals', page, limit);
+   
+    return response.combined || []; 
+  },
+  getM2MRenewals: (page, limit) => fetchEndpoint('m2m-subscriptions', page, limit),
+  getPlanRenewals: (page, limit) => fetchEndpoint('plan-subscriptions', page, limit),
   getPool: (page, limit) => fetchEndpoint('pools', page, limit),
 
   // --- CORRECCIÓN ---

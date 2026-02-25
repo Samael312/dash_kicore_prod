@@ -20,8 +20,9 @@ class Settings:
     URL_DEVICES2 = f"{BASE_URL}/kiwi"
     URL_MODEL_B = f"{BASE_URL}/models"
     URL_VERSION_K = f"{BASE_URL}/versions"
-    URL_REN = f"{BASE_URL}/boards/renewals"
-    
+    #URL_REN = f"{BASE_URL}/boards/renewals"
+    URL_M2M_REN = f"{BASE_URL}/m2m-subscriptions/renewals"
+    URL_PLAN_REN = f"{BASE_URL}/plan-subscriptions/renewals"
     URL_INFO = f"{BASE_URL}/boards/info"
     URL_M2M = f"{BASE_URL}/m2m"
     URL_HISTORY = f"{BASE_URL}/m2m/{{icc}}/consumes"

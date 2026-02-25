@@ -174,12 +174,24 @@ const RenewalsDashboard = () => {
   const [drilldownModel, setDrilldownModel] = useState(null); // real_model_name
   const [drilldownStatus, setDrilldownStatus] = useState(null); // status_label
 
+  const normalizeRenewalsPayload = (payload) => {
+    if (Array.isArray(payload)) return payload;
+    if (!payload || typeof payload !== 'object') return [];
+
+    const candidateKeys = ['items', 'data', 'content', 'results', 'records'];
+    for (const key of candidateKeys) {
+      if (Array.isArray(payload[key])) return payload[key];
+    }
+
+    return [];
+  };
+
   useEffect(() => {
     const fetchData = async () => {
       setLoading(true);
       try {
         const res = await api.getRenewals(1, 5000);
-        setRawData(Array.isArray(res) ? res : res?.items || []);
+        setRawData(normalizeRenewalsPayload(res));
       } catch (e) {
         console.error('Error fetching data:', e);
       } finally {

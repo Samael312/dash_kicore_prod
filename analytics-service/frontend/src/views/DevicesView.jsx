@@ -78,11 +78,6 @@ const DevicesView = () => {
     return data;
   }, [rawData, selectedModel, selectedOrg, drilldownModel, drilldownHardware, drilldownStatus, isKiwi]);
 
-  // Reset de página al cambiar filtros externos / búsqueda / pageSize
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [selectedModel, selectedOrg, drilldownModel, drilldownHardware, drilldownStatus, rowsPerPage, searchTerm]);
-
   const totalItems = filteredByControls.length;
   const totalPages = Math.max(1, Math.ceil(totalItems / rowsPerPage));
 
@@ -166,6 +161,7 @@ const DevicesView = () => {
                   setDrilldownModel(null);
                   setDrilldownHardware(null);
                   setDrilldownStatus(null);
+                  setCurrentPage(1);
                 }}
               >
                 <option value="Todas">Todas</option>
@@ -188,6 +184,7 @@ const DevicesView = () => {
                 setDrilldownModel(null);
                 setDrilldownHardware(null);
                 setDrilldownStatus(null);
+                setCurrentPage(1);
               }}
             >
               <option value="Todos">Todos</option>
@@ -206,6 +203,7 @@ const DevicesView = () => {
                   setDrilldownModel(null);
                   setDrilldownHardware(null);
                   setDrilldownStatus(null);
+                  setCurrentPage(1);
                 }}
                 className="w-full px-4 py-2.5 bg-red-100 text-red-700 rounded hover:bg-red-200 text-sm font-bold border border-red-200 transition-colors"
               >
@@ -266,6 +264,7 @@ const DevicesView = () => {
                   setDrilldownModel(label);
                   setDrilldownHardware(null);
                   setDrilldownStatus(null);
+                  setCurrentPage(1);
                 }}
               />
             ),
@@ -289,6 +288,7 @@ const DevicesView = () => {
                   setDrilldownHardware(label);
                   setDrilldownModel(null);
                   setDrilldownStatus(null);
+                  setCurrentPage(1);
                 }}
               />
             ),
@@ -311,6 +311,7 @@ const DevicesView = () => {
                   setDrilldownStatus(label);
                   setDrilldownModel(null);
                   setDrilldownHardware(null);
+                  setCurrentPage(1);
                 }}
               />
             ),
@@ -346,11 +347,11 @@ const DevicesView = () => {
         loading={loading}
         enableToolbar
         searchTerm={searchTerm}
-        setSearchTerm={setSearchTerm}
+        setSearchTerm={val => { setSearchTerm(val); setCurrentPage(1); }}
         searchPlaceholder="Buscar por UUID, Nombre, Modelo..."
         searchableKeys={['uuid', 'name', 'ssid', 'model', 'organization', 'status_clean', 'hardware_version']}
         pageSize={rowsPerPage}
-        setPageSize={setRowsPerPage}
+        setPageSize={val => { setRowsPerPage(val); setCurrentPage(1); }}
         rowsPerPageOptions={[5, 10, 25, 50, 100]}
         currentPage={currentPage}
         setCurrentPage={setCurrentPage}

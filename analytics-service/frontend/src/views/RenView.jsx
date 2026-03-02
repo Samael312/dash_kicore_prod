@@ -254,18 +254,6 @@ const RenewalsDashboard = () => {
   }, [dataByTab, drilldownState, drilldownModel, drilldownStatus]);
 
   // ✅ CORRECTO: Un efecto solo para reiniciar la página si aplicas/buscas algo
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [drilldownState, drilldownModel, drilldownStatus, rowsPerPage, searchTerm]);
-
-  // ✅ CORRECTO: Un efecto para limpiar filtros SÓLO cuando cambias de pestaña
-  useEffect(() => {
-    setDrilldownState(null);
-    setDrilldownModel(null);
-    setDrilldownStatus(null);
-    setSearchTerm('');
-  }, [activeTab]);
-
   const processed = useMemo(() => {
     const source = filteredByControls;
 
@@ -413,7 +401,7 @@ const RenewalsDashboard = () => {
 
         <div className="flex bg-gray-100 p-1 rounded-lg">
           <button
-            onClick={() => setActiveTab('all')}
+            onClick={() => { setActiveTab('all'); setDrilldownState(null); setDrilldownModel(null); setDrilldownStatus(null); setSearchTerm(''); setCurrentPage(1); }}
             className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
               activeTab === 'all' ? 'bg-white shadow text-blue-600' : 'text-gray-600 hover:text-gray-900'
             }`}
@@ -421,7 +409,7 @@ const RenewalsDashboard = () => {
             Todas
           </button>
           <button
-            onClick={() => setActiveTab('m2m')}
+            onClick={() => { setActiveTab('m2m'); setDrilldownState(null); setDrilldownModel(null); setDrilldownStatus(null); setSearchTerm(''); setCurrentPage(1); }}
             className={`px-4 py-2 rounded-md text-sm font-medium transition-colors flex items-center gap-2 ${
               activeTab === 'm2m' ? 'bg-white shadow text-blue-600' : 'text-gray-600 hover:text-gray-900'
             }`}
@@ -429,7 +417,7 @@ const RenewalsDashboard = () => {
             <Wifi size={16} /> M2M
           </button>
           <button
-            onClick={() => setActiveTab('plan')}
+            onClick={() => { setActiveTab('plan'); setDrilldownState(null); setDrilldownModel(null); setDrilldownStatus(null); setSearchTerm(''); setCurrentPage(1); }}
             className={`px-4 py-2 rounded-md text-sm font-medium transition-colors flex items-center gap-2 ${
               activeTab === 'plan' ? 'bg-white shadow text-blue-600' : 'text-gray-600 hover:text-gray-900'
             }`}
@@ -444,6 +432,7 @@ const RenewalsDashboard = () => {
               setDrilldownState(null);
               setDrilldownModel(null);
               setDrilldownStatus(null);
+              setCurrentPage(1);
             }}
             className="px-4 py-2 bg-red-100 text-red-700 rounded hover:bg-red-200 text-sm font-bold border border-red-200 transition-colors"
           >
@@ -487,6 +476,7 @@ const RenewalsDashboard = () => {
                   setDrilldownState(safeExtractLabel(item));
                   setDrilldownModel(null);
                   setDrilldownStatus(null);
+                  setCurrentPage(1);
                 }}
               />
             ),
@@ -510,6 +500,7 @@ const RenewalsDashboard = () => {
                   setDrilldownModel(safeExtractLabel(item));
                   setDrilldownState(null);
                   setDrilldownStatus(null);
+                  setCurrentPage(1);
                 }}
               />
             ),
@@ -538,6 +529,7 @@ const RenewalsDashboard = () => {
                   setDrilldownStatus(safeExtractLabel(item));
                   setDrilldownState(null);
                   setDrilldownModel(null);
+                  setCurrentPage(1);
                 }}
               />
             ),
@@ -588,11 +580,11 @@ const RenewalsDashboard = () => {
         loading={loading}
         enableToolbar
         searchTerm={searchTerm}
-        setSearchTerm={setSearchTerm}
+        setSearchTerm={val => { setSearchTerm(val); setCurrentPage(1); }}
         searchPlaceholder="Buscar por nombre, cliente o UUID..."
         searchableKeys={['m2m_name', 'final_client', 'uuid', 'model_name', 'status_label', 'ki_subscription_name']}
         pageSize={rowsPerPage}
-        setPageSize={setRowsPerPage}
+        setPageSize={val => { setRowsPerPage(val); setCurrentPage(1); }}
         rowsPerPageOptions={[5, 10, 25, 50]}
         currentPage={currentPage}
         setCurrentPage={setCurrentPage}

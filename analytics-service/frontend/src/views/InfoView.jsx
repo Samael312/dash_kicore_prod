@@ -23,6 +23,13 @@ import {
 // PieChartCard usa Pie internamente => requiere ArcElement
 ChartJS.register(CategoryScale, LinearScale, ArcElement, BarElement, Title, Tooltip, Legend);
 
+const KpiBox = ({ title, value, color = 'blue' }) => (
+  <div className={`bg-white p-6 rounded shadow border-l-4 border-${color}-600 flex flex-col items-center w-full`}>
+    <span className="text-gray-500 text-sm uppercase font-bold tracking-wider mb-2">{title}</span>
+    <span className={`text-3xl font-bold text-${color}-900`}>{value}</span>
+  </div>
+);
+
 const InfoView = () => {
   const [data, setData] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -113,11 +120,6 @@ const InfoView = () => {
     return result;
   }, [processedData, selectedVersion, drilldownVersion, drilldownStatus, searchTerm]);
 
-  // Reset paginación al cambiar filtros
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [selectedVersion, searchTerm, rowsPerPage, drilldownVersion, drilldownStatus]);
-
   // --- 3. PAGINACIÓN ---
   const totalItems = filteredData.length;
   const totalPages = Math.max(1, Math.ceil(totalItems / rowsPerPage));
@@ -178,13 +180,6 @@ const InfoView = () => {
   const updatedPct = totalItems ? ((updatedCount / totalItems) * 100).toFixed(1) : '0.0';
   const modeVersion = versionStats.length > 0 ? versionStats[0].name : 'N/A';
 
-  const KpiBox = ({ title, value, color = 'blue' }) => (
-    <div className={`bg-white p-6 rounded shadow border-l-4 border-${color}-600 flex flex-col items-center w-full`}>
-      <span className="text-gray-500 text-sm uppercase font-bold tracking-wider mb-2">{title}</span>
-      <span className={`text-3xl font-bold text-${color}-900`}>{value}</span>
-    </div>
-  );
-
   const hasActiveFilter = Boolean(
     (selectedVersion && selectedVersion !== 'Todas') || drilldownVersion || drilldownStatus || searchTerm.trim()
   );
@@ -215,6 +210,7 @@ const InfoView = () => {
                 setSelectedVersion('Todas');
                 setDrilldownVersion(null);
                 setDrilldownStatus(null);
+                setCurrentPage(1);
               }}
               className="px-4 py-2 bg-red-100 text-red-700 rounded hover:bg-red-200 text-sm font-bold border border-red-200 transition-colors"
             >
@@ -257,6 +253,7 @@ const InfoView = () => {
                   setDrilldownVersion(label);
                   setDrilldownStatus(null);
                   setSelectedVersion(label);
+                  setCurrentPage(1);
                 }}
               />
             ),
@@ -279,6 +276,7 @@ const InfoView = () => {
                 onSliceClick={(label) => {
                   setDrilldownStatus(label);
                   setDrilldownVersion(null);
+                  setCurrentPage(1);
                 }}
               />
             ),
@@ -338,11 +336,11 @@ const InfoView = () => {
               loading={loading}
               enableToolbar
               searchTerm={searchTerm}
-              setSearchTerm={setSearchTerm}
+              setSearchTerm={val => { setSearchTerm(val); setCurrentPage(1); }}
               searchPlaceholder='Buscar por UUID, Nombre, Modelo...'
               searchableKeys={['uuid','quiiotd_version','compilation_date_fmt', 'update_status']}
               pageSize={rowsPerPage}
-              setPageSize={setRowsPerPage}
+              setPageSize={val => { setRowsPerPage(val); setCurrentPage(1); }}
               rowsPerPageOptions={[5,10,25,50,100]}
               currentPage={currentPage}
               setCurrentPage={setCurrentPage}

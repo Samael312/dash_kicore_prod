@@ -4,8 +4,6 @@ from fastapi import FastAPI, HTTPException, Query, Body
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel 
 import pandas as pd
-import numpy as np
-import math
 
 # 1. Imports de tu proyecto
 from app.api_client import CoreClient

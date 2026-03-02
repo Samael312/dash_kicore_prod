@@ -309,10 +309,6 @@ const PoolView = () => {
   }, [poolsWithLabels, drillOrganization, searchTerm]);
 
   // Resetear página al cambiar filtros
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [selectedOrg, drillOrganization, rowsPerPage, searchTerm]);
-
   // --- LÓGICA DE PAGINACIÓN PARA LA TABLA ---
   const totalItems = filteredByControls.length;
   const totalPages = Math.max(1, Math.ceil(totalItems / rowsPerPage));
@@ -375,7 +371,8 @@ const PoolView = () => {
     const org = payload?.commercialGroup;
     if (!org) return;
     setDrillOrganization((prev) => (String(prev) === String(org) ? null : org));
-    setExpandedOrg((prev) => (String(prev) === String(org) ? prev : org)); 
+    setExpandedOrg((prev) => (String(prev) === String(org) ? prev : org));
+    setCurrentPage(1);
   };
 
   const hasActiveFilter = Boolean(drillOrganization);
@@ -496,6 +493,7 @@ const PoolView = () => {
                 setSelectedOrg(e.target.value);
                 setDrillOrganization(null);
                 setExpandedOrg(null);
+                setCurrentPage(1);
               }}
               className="block w-full md:w-64 pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-md border"
             >
@@ -513,6 +511,7 @@ const PoolView = () => {
               onClick={() => {
                 setDrillOrganization(null);
                 setExpandedOrg(null);
+                setCurrentPage(1);
               }}
               className="px-3 py-2 text-xs font-bold bg-red-100 text-red-700 border border-red-200 rounded hover:bg-red-200 transition-colors"
             >
@@ -764,11 +763,11 @@ const PoolView = () => {
         loading={loading}
         enableToolbar
         searchTerm={searchTerm}
-        setSearchTerm={setSearchTerm}
+        setSearchTerm={val => { setSearchTerm(val); setCurrentPage(1); }}
         searchPlaceholder="Buscar Pool ID, Grupo o Estado..."
         searchableKeys={['pool_id', 'commercialGroup', 'status_label']}
         pageSize={rowsPerPage}
-        setPageSize={setRowsPerPage}
+        setPageSize={val => { setRowsPerPage(val); setCurrentPage(1); }}
         rowsPerPageOptions={[5, 10, 20]}
         currentPage={currentPage}
         setCurrentPage={setCurrentPage}

@@ -1,5 +1,4 @@
 import pandas as pd
-import numpy as np
 
 def _clean_uuid(series):
     """Ayuda a limpiar UUIDs para asegurar el cruce (lowercase + strip)"""
@@ -71,9 +70,6 @@ def _get_status_label(val):
     s = str(val).lower()
     return "Terminado" if s in ["terminado", "online", "connected", "true"] else "Sin Terminar"
 
-def _get_enabled_label(val):
-    s = str(val).lower()
-    return "Habilitado" if s in ["terminado", "asignado", "fabricado", "true", "enabled"] else "Deshabilitado"
 # -------------------------------------------------------------------------
 # BOARDS
 # -------------------------------------------------------------------------

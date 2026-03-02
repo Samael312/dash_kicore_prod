@@ -3,6 +3,7 @@ import { api } from '../services/api'; // Asegúrate de que esta ruta sea correc
 import { Layers, Activity, Search, Loader2, ChevronDown, ChevronRight } from 'lucide-react';
 import TableCard from '../components/TableCard';
 import SelectDash from '../components/SelectDash';
+import { CorpColors } from '../utils/colors';
 
 import { Line } from 'react-chartjs-2';
 import {
@@ -36,19 +37,47 @@ ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Title, C
 
 // Devuelve configuración de color basada en el porcentaje
 const getStatusConfig = (percent) => {
-  // CRÍTICO (> 90%)
-  if (percent > 90) return { hex: '#ba0c0c', tailwind: 'text-red-600 font-extrabold', label: 'Crítico' };
-  
-  // ADVERTENCIA (75% - 90%)
-  if (percent > 65) return { hex: '#f72424', tailwind: 'text-red-500 font-bold', label: 'Alto' };
-  
-  // PRECAUCIÓN (50% - 75%)
-  if (percent > 50) return { hex: '#f97316', tailwind: 'text-orange-600 font-bold', label: 'Medio' };
+  if (percent === 0) {
+    return {
+      hex: '#eab308',
+      tailwind: 'text-yellow-600 font-medium',
+      label: 'Sin Consumo'
+    };
+  }
 
-   if (percent === 0) return { hex: '#eab308', tailwind: 'text-yellow-600 font-medium', label: 'Medio' };
-  
-  // NORMAL (< 50%)
-  return { hex: '#0dbb0e', tailwind: 'text-green-600', label: 'Normal' };
+  // CRÍTICO (>= 90%)
+  if (percent >= 90) {
+    return {
+      hex: '#ba0c0c',
+      tailwind: 'text-red-700 font-extrabold',
+      label: 'Crítico'
+    };
+  }
+
+  // ALTO (65% - 89%)
+  if (percent >= 65) {
+    return {
+      hex: '#f72424',
+      tailwind: 'text-red-500 font-bold',
+      label: 'Alto'
+    };
+  }
+
+  // MEDIO (40% - 64%)
+  if (percent >= 40) {
+    return {
+      hex: '#f97316',
+      tailwind: 'text-orange-600 font-bold',
+      label: 'Medio'
+    };
+  }
+
+  // NORMAL (1% - 39%)
+  return {
+    hex: '#0dbb0e',
+    tailwind: 'text-green-600 font-semibold',
+    label: 'Normal'
+  };
 };
 
 // Wrapper para compatibilidad con las gráficas antiguas que solo esperan HEX
@@ -602,7 +631,7 @@ const PoolView = () => {
                   </div>
                   
                   
-                  <ResponsiveContainer width="100%" height="85%">
+                  <ResponsiveContainer width="100%" height="95%">
                     <BarChart data={chartData} margin={{ top: 20, right: 30, left: 20, bottom: 80 }}>
                       <defs>
                       <linearGradient id="arcoiris" x1="0" y1="0" x2="1" y2="0">
@@ -614,40 +643,55 @@ const PoolView = () => {
                       </linearGradient>
                     </defs>
                       <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                      <XAxis dataKey="name" tick={{ fontSize: 11 }} interval={0} angle={-20} textAnchor="end" height={80} />
+                      <XAxis dataKey="name" tick={{ fontSize: 11 }} interval={0} angle={-10} textAnchor="end" height={70} />
                       <YAxis />
                       <Tooltip content={tooltipContent} />
                       <Legend verticalAlign="top" height={36} />
 
-                      <Bar dataKey="Consumo" name="Consumo (GB)" fill="url(#arcoiris)" radius={[4, 4, 0, 0]} onClick={handleBarClick}>
-                        {chartData.map((entry, index) => {
+                      <Bar 
+                          dataKey="Consumo" 
+                          name="Consumo (GB)" 
+                          fill="url(#arcoiris)"
+                          radius={[4, 4, 0, 0]} 
+                          onClick={handleBarClick}
+                          shape={(props) => {
+                            const { x, y, width, height, index } = props;
+                            const entry = chartData[index];
+                            const isSelected = drillOrganization && String(drillOrganization) === String(entry.commercialGroup);
+                            const base = getBarColor(entry.percent);
+                            const opacity = isSelected ? 1 : hasActiveFilter ? 0.35 : 1;
+                            return (
+                              <rect
+                                x={x} y={y} width={width} height={height}
+                                fill={base}
+                                opacity={opacity}
+                                rx={4} ry={4}
+                                cursor="pointer"
+                              />
+                            );
+                          }}
+                        />
+                      <Bar 
+                        dataKey="Limite" 
+                        name="Límite (GB)" 
+                        radius={[4, 4, 0, 0]} 
+                        onClick={handleBarClick}
+                        shape={(props) => {
+                          const { x, y, width, height, index } = props;
+                          const entry = chartData[index];
                           const isSelected = drillOrganization && String(drillOrganization) === String(entry.commercialGroup);
-                          // Usar helper para color
-                          const base = getBarColor(entry.percent);
+                          const opacity = isSelected ? 1 : hasActiveFilter ? 0.35 : 1;
                           return (
-                            <Cell
-                              key={`c-${index}`}
-                              cursor="pointer"
-                              fill={base}
-                              opacity={isSelected ? 1 : hasActiveFilter ? 0.35 : 1}
-                            />
-                          );
-                        })}
-                      </Bar>
-
-                      <Bar dataKey="Limite" name="Límite (GB)" fill="#3e4143" radius={[4, 4, 0, 0]} onClick={handleBarClick}>
-                        {chartData.map((entry, index) => {
-                          const isSelected = drillOrganization && String(drillOrganization) === String(entry.commercialGroup);
-                          return (
-                            <Cell
-                              key={`l-${index}`}
-                              cursor="pointer"
+                            <rect
+                              x={x} y={y} width={width} height={height}
                               fill="#3e4143"
-                              opacity={isSelected ? 1 : hasActiveFilter ? 0.35 : 1}
+                              opacity={opacity}
+                              rx={4} ry={4}
+                              cursor="pointer"
                             />
                           );
-                        })}
-                      </Bar>
+                        }}
+                      />
                     </BarChart>
                   </ResponsiveContainer>
                 </div>
@@ -662,7 +706,7 @@ const PoolView = () => {
           {
             id: 'Tendencia',
             title: 'Tendencia de Consumo',
-            defaultMode: 'show',
+            defaultMode: 'hide',
             render: () => (
               <div className="bg-white p-6 rounded shadow border border-gray-200 w-full flex flex-col h-[400px]">
                 <div className="flex justify-between items-center mb-4 border-b pb-2">
@@ -702,8 +746,9 @@ const PoolView = () => {
         title="Pools"
         data={filteredByControls} 
         columns={[
-          { header: 'Pool ID', accessor: 'pool_id', render: (r) => <span className="font-mono font-bold text-blue-700 text-xs">{r.pool_id}</span> },
-          { header: 'Organización', accessor: 'commercialGroup', render: (r) => <span className="text-gray-600 font-medium">{r.commercialGroup}</span> },
+          //{ header: 'Pool ID', accessor: 'pool_id', render: (r) => <span className="font-mono font-bold text-blue-700 text-xs">{r.pool_id}</span> },
+          { header: 'Organización', accessor: 'organization', render: (r) => <span className={CorpColors[r.organization] || 'font-bold text-gray-700'}>{r.organization}</span> },
+          { header: 'Nombre', accessor: 'commercialGroup', render: (r) => <span className="text-gray-600 font-medium">{r.commercialGroup}</span> },
           {
             header: 'SIMs Activas',
             accessor: 'sims_active',
@@ -743,18 +788,17 @@ const PoolView = () => {
           },
           {
             header: 'Estado',
-            accessor: 'status_label',
+            accessor: 'usage_percent',
             render: (r) => {
-              const p = r.usage_percent || 0;
-              const label = r.status_label || 'Normal';
-              let color = 'bg-green-100 text-green-800';
-              if (label === 'Crítico') color = 'bg-red-100 text-red-800';
-              else if (label === 'Alto') color = 'bg-orange-100 text-orange-800';
-              else if (label === 'Medio') color = 'bg-yellow-100 text-yellow-800';
+              const p = Number(r.usage_percent) || 0;
               
+              const { label, tailwind } = getStatusConfig(p);
+
               return (
-                <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${color}`}>
-                  {label} ({p.toFixed(1)}%)
+                <span
+                  className={`px-2 py-0.5 rounded-sm text-[10px] font-bold uppercase ${tailwind}`}
+                >
+                  ({p.toFixed(1)}% {label})
                 </span>
               );
             },

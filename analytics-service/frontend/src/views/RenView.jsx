@@ -268,11 +268,13 @@ const RenewalsDashboard = () => {
     }
 
     const today = new Date();
+    const threeMonthsLater = new Date();
+    threeMonthsLater.setMonth(today.getMonth() + 3);
     const stats = { totalDevices: 0, expired: 0, expiringSoon: 0, active: 0 };
     const stateCount = {};
     const modelCount = {};
     const statusCount = {};
-    const renewalsTimeline = {}; 
+    const renewalsTimeline = {};
 
     source.forEach((device) => {
       stats.totalDevices++;
@@ -291,13 +293,23 @@ const RenewalsDashboard = () => {
         const renewDate = new Date(device.date_to_renew);
         if (!isNaN(renewDate)) {
           const diffDays = Math.ceil((renewDate - today) / (1000 * 60 * 60 * 24));
-          if (diffDays < 0) stats.expired++;
-          else if (diffDays <= 30) stats.expiringSoon++;
-          else stats.active++;
+
+          let color;
+          if (diffDays < 0) {
+            stats.expired++;
+            color = '#dc2626';
+          } else if (diffDays <= 30) {
+            stats.expiringSoon++;
+            color = '#eab308';
+          } else {
+            stats.active++;
+            color = '#16a34a';
+          }
 
           const monthKey = renewDate.toISOString().slice(0, 7);
-          if (!renewalsTimeline[monthKey]) renewalsTimeline[monthKey] = { count: 0, items: [] };
+          if (!renewalsTimeline[monthKey]) renewalsTimeline[monthKey] = { count: 0, items: [], colors: [] };
           renewalsTimeline[monthKey].count++;
+          renewalsTimeline[monthKey].colors.push(color);
           
           renewalsTimeline[monthKey].items.push({
             date: device.date_to_renew,
@@ -315,6 +327,17 @@ const RenewalsDashboard = () => {
     });
 
     const sortedMonths = Object.keys(renewalsTimeline).sort();
+
+    // construir datos de gráfico una vez que la línea temporal esté llena
+    const labels = sortedMonths;
+    const data = labels.map(m => renewalsTimeline[m].count);
+    const backgroundColors = labels.map(m => {
+      const colors = renewalsTimeline[m].colors || [];
+      if (colors.includes('#dc2626')) return '#dc2626';
+      if (colors.includes('#eab308')) return '#eab308';
+      return '#16a34a';
+    });
+    const extraData = labels.map(m => renewalsTimeline[m].items || []);
 
     const stateStats = Object.entries(stateCount)
       .map(([name, value]) => ({ name, value }))
@@ -335,19 +358,18 @@ const RenewalsDashboard = () => {
       modelStats,
       statusStats,
       lineChartData: {
-        labels: sortedMonths,
+        labels,
         datasets: [
           {
             label: 'Vencimientos',
-            data: sortedMonths.map((m) => renewalsTimeline[m].count),
-            extraData: sortedMonths.map((m) => renewalsTimeline[m].items),
-            borderColor: '#EF4444',
-            backgroundColor: 'rgba(239, 68, 68, 0.1)',
-            fill: true,
+            data,
+            backgroundColor: backgroundColors,
+            borderColor: backgroundColors,
+            extraData,
             tension: 0.3,
-          },
-        ],
-      },
+          }
+        ]
+      }
     };
   }, [filteredByControls]);
 

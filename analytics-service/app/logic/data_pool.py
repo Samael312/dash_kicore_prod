@@ -80,13 +80,27 @@ def process_pools(raw_data):
         lambda row: (row['bytes_consumed'] / row['bytes_limit'] * 100) if row['bytes_limit'] > 0 else 0.0, 
         axis=1
     )
+
+    mask_KI = df["commercialGroup"].str.contains("KICONEX", case=False, na=False)
+    df_clean.loc[mask_KI, 'organization'] = 'KICONEX'
     
+    mask_GA = df["commercialGroup"].str.contains("GENAQ", case=False, na=False)
+    df_clean.loc[mask_GA, 'organization'] = 'GENAQ'
+
+    mask_KEY = df["commercialGroup"].str.contains("KEYTER", case=False, na=False)
+    df_clean.loc[mask_KEY, 'organization'] = 'KEYTER'
+
+    mask_IN = df["commercialGroup"].str.contains("INTARCON", case=False, na=False)
+    df_clean.loc[mask_IN, 'organization'] = 'INTARCON'
+
     # Redondear porcentaje a 2 decimales
     df_clean['usage_percent'] = df_clean['usage_percent'].round(2)
+    df_clean['organization'] = df_clean['organization'].fillna('Sin Organización')
 
     # 5. Seleccionar columnas finales
     final_cols = [
-        'pool_id', 
+        'pool_id',
+        'organization', 
         'commercialGroup', 
         'sims_active', 
         'sims_total', 

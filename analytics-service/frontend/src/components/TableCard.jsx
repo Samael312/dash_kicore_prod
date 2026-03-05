@@ -1,5 +1,6 @@
 // TableCard.jsx
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import {
   ChevronLeft,
   ChevronRight,
@@ -15,33 +16,119 @@ import {
 
 const defaultRowsPerPageOptions = [5, 10, 25, 50, 100];
 
+// Dropdown renderizado via portal — siempre por encima de todo
+const FilterDropdown = ({ anchorRef, accessor, filters, uniqueValues, onFilterChange, onClear, onClose }) => {
+  const [pos, setPos] = useState(null);
+  const isFiltered = filters[accessor]?.length > 0;
+
+  useEffect(() => {
+    if (anchorRef?.current) {
+      const rect = anchorRef.current.getBoundingClientRect();
+      setPos({
+        top: rect.bottom + window.scrollY + 6,
+        left: Math.max(4, rect.right + window.scrollX - 256),
+      });
+    }
+  }, [anchorRef]);
+
+  if (!pos) return null;
+
+  return createPortal(
+    <>
+      {/* Backdrop invisible */}
+      <div className="fixed inset-0 z-[9998]" onClick={onClose} />
+
+      {/* Dropdown */}
+      <div
+        style={{ position: 'absolute', top: pos.top, left: pos.left, width: 256, zIndex: 9999 }}
+        className="bg-white rounded-xl shadow-2xl ring-1 ring-black/10 flex flex-col overflow-hidden"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div className="px-3 py-2 border-b border-slate-100 bg-slate-50/50 flex justify-between items-center">
+          <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
+            Filtrar
+            {isFiltered && (
+              <span className="ml-2 text-indigo-600">({filters[accessor].length} sel.)</span>
+            )}
+          </span>
+          <button
+            onClick={onClose}
+            className="p-1 hover:bg-slate-100 hover:text-slate-700 rounded transition-colors"
+          >
+            <X size={14} />
+          </button>
+        </div>
+
+        {/* Options */}
+        <div className="max-h-60 overflow-y-auto p-1.5 space-y-0.5">
+          {uniqueValues.map((val, vIdx) => {
+            const isChecked = filters[accessor]?.includes(val);
+            return (
+              <label
+                key={vIdx}
+                className={`flex items-center space-x-3 px-3 py-2 rounded-lg cursor-pointer text-sm transition-colors ${
+                  isChecked ? 'bg-indigo-50 text-indigo-700' : 'hover:bg-slate-50 text-slate-600'
+                }`}
+              >
+                <input
+                  type="checkbox"
+                  checked={isChecked || false}
+                  onChange={() => onFilterChange(accessor, val)}
+                  className="w-4 h-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                />
+                <span className="truncate select-none">
+                  {val === '' ? <em className="text-slate-400">Sin valor</em> : val}
+                </span>
+              </label>
+            );
+          })}
+        </div>
+
+        {/* Footer */}
+        <div className="p-2 border-t border-slate-100 bg-slate-50/30 flex gap-2">
+          <button
+            onClick={() => onClear(accessor)}
+            disabled={!isFiltered}
+            className="flex-1 text-xs text-red-500 hover:text-red-600 hover:bg-red-50 font-medium px-3 py-1.5 rounded transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            Limpiar
+          </button>
+          <button
+            onClick={onClose}
+            className="flex-1 text-xs text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50 font-medium px-3 py-1.5 rounded transition-colors"
+          >
+            Aplicar
+          </button>
+        </div>
+      </div>
+    </>,
+    document.body
+  );
+};
+
 const TableCard = ({
   title,
   data = [],
   columns = [],
   loading = false,
-
-  // --- PAGINACIÓN ---
   currentPage,
   setCurrentPage,
   totalItems,
   pageSize,
   setPageSize,
   totalPages,
-
-  // --- TOOLBAR / SEARCH ---
   enableToolbar = true,
   searchTerm,
   setSearchTerm,
   searchPlaceholder = 'Buscar registros...',
   searchableKeys,
-
-  // --- ROWS PER PAGE ---
   rowsPerPageOptions = defaultRowsPerPageOptions,
 }) => {
   const [sortConfig, setSortConfig] = useState({ key: null, direction: 'ascending' });
   const [filters, setFilters] = useState({});
   const [activeFilterColumn, setActiveFilterColumn] = useState(null);
+  const filterButtonRefs = useRef({});
 
   const requestSort = (key) => {
     let direction = 'ascending';
@@ -75,11 +162,9 @@ const TableCard = ({
     return (columns || []).map((c) => c.accessor).filter(Boolean);
   }, [searchableKeys, columns]);
 
-  // --- LÓGICA PRINCIPAL: Search -> Column filters -> Sort ---
   const processedData = useMemo(() => {
     let result = [...(data || [])];
 
-    // 0) Search (sobre todo el dataset)
     const term = (searchTerm ?? '').trim().toLowerCase();
     if (term) {
       result = result.filter((row) =>
@@ -87,7 +172,6 @@ const TableCard = ({
       );
     }
 
-    // 1) Column filters
     Object.keys(filters).forEach((key) => {
       const selected = filters[key];
       if (selected?.length) {
@@ -95,24 +179,20 @@ const TableCard = ({
       }
     });
 
-    // 2) Sort
     if (sortConfig.key !== null) {
       result.sort((a, b) => {
         const aValue = a?.[sortConfig.key];
         const bValue = b?.[sortConfig.key];
-
         if (aValue === bValue) return 0;
-        if (aValue === null || aValue === undefined) return 1;
-        if (bValue === null || bValue === undefined) return -1;
-
+        if (aValue == null) return 1;
+        if (bValue == null) return -1;
         if (typeof aValue === 'number' && typeof bValue === 'number') {
           return sortConfig.direction === 'ascending' ? aValue - bValue : bValue - aValue;
         }
-
-        const stringA = String(aValue).toLowerCase();
-        const stringB = String(bValue).toLowerCase();
-        if (stringA < stringB) return sortConfig.direction === 'ascending' ? -1 : 1;
-        if (stringA > stringB) return sortConfig.direction === 'ascending' ? 1 : -1;
+        const sA = String(aValue).toLowerCase();
+        const sB = String(bValue).toLowerCase();
+        if (sA < sB) return sortConfig.direction === 'ascending' ? -1 : 1;
+        if (sA > sB) return sortConfig.direction === 'ascending' ? 1 : -1;
         return 0;
       });
     }
@@ -120,7 +200,6 @@ const TableCard = ({
     return result;
   }, [data, filters, sortConfig, searchTerm, effectiveSearchKeys]);
 
-  // --- PAGINACIÓN (sobre processedData, NO sobre data recortada) ---
   const paginationEnabled =
     typeof currentPage === 'number' &&
     typeof totalItems === 'number' &&
@@ -139,7 +218,6 @@ const TableCard = ({
     ? Math.min(indexOfFirstItem + pageRows.length, totalItems)
     : 0;
 
-  // Reset a página 1 si cambian search o pageSize
   useEffect(() => {
     if (paginationEnabled) setCurrentPage(1);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -155,22 +233,21 @@ const TableCard = ({
     );
   };
 
-  return (
-    <div className="w-full bg-white rounded-xl shadow-md border border-slate-200/60 flex flex-col relative overflow-hidden font-sans">
-      {activeFilterColumn && (
-        <div
-          className="fixed inset-0 z-20 bg-black/5 backdrop-blur-[1px]"
-          onClick={() => setActiveFilterColumn(null)}
-        />
-      )}
+  // Inicializar refs para cada columna
+  columns.forEach((col) => {
+    if (col.accessor && !filterButtonRefs.current[col.accessor]) {
+      filterButtonRefs.current[col.accessor] = React.createRef();
+    }
+  });
 
+  return (
+    <div className="w-full bg-white rounded-xl shadow-md border border-slate-200/60 flex flex-col font-sans">
       {/* HEADER & TOOLBAR */}
       <div className="bg-white border-b border-slate-100">
         <div className="p-6 pb-4">
           <div className="flex justify-between items-start mb-6">
             <div>
               <h2 className="text-xl font-bold text-slate-800 tracking-tight">{title}</h2>
-
               {Object.keys(filters).length > 0 && (
                 <div className="mt-1 flex items-center gap-2">
                   <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-indigo-50 text-indigo-700 border border-indigo-100">
@@ -185,7 +262,6 @@ const TableCard = ({
                 </div>
               )}
             </div>
-
             {loading && (
               <div className="p-2 bg-indigo-50 rounded-full">
                 <Loader2 className="animate-spin text-indigo-600" size={20} />
@@ -195,7 +271,6 @@ const TableCard = ({
 
           {enableToolbar && (
             <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
-              {/* Search */}
               {typeof searchTerm === 'string' && typeof setSearchTerm === 'function' && (
                 <div className="relative w-full sm:max-w-md group">
                   <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
@@ -213,7 +288,6 @@ const TableCard = ({
                 </div>
               )}
 
-              {/* Rows selector */}
               {typeof pageSize === 'number' && typeof setPageSize === 'function' && (
                 <div className="flex items-center gap-3 w-full sm:w-auto justify-end">
                   <span className="text-xs font-medium text-slate-500 uppercase tracking-wide">Filas:</span>
@@ -224,9 +298,7 @@ const TableCard = ({
                       onChange={(e) => setPageSize(Number(e.target.value))}
                     >
                       {rowsPerPageOptions.map((opt) => (
-                        <option key={opt} value={opt}>
-                          {opt}
-                        </option>
+                        <option key={opt} value={opt}>{opt}</option>
                       ))}
                     </select>
                     <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-slate-500">
@@ -240,7 +312,7 @@ const TableCard = ({
         </div>
       </div>
 
-      {/* TABLE */}
+      {/* TABLE — sin overflow-hidden para no cortar el dropdown */}
       <div className="overflow-x-auto">
         <table className="w-full text-left text-slate-600">
           <thead className="bg-slate-50/80 border-b border-slate-200">
@@ -248,18 +320,13 @@ const TableCard = ({
               {columns.map((col, idx) => {
                 const isFiltered = filters[col.accessor]?.length > 0;
                 return (
-                  <th
-                    key={idx}
-                    className="px-6 py-4 select-none relative group align-middle first:pl-6 last:pr-6"
-                  >
+                  <th key={idx} className="px-6 py-4 select-none align-middle first:pl-6 last:pr-6">
                     <div className="flex items-center justify-between gap-3">
                       <div
-                        className={`flex items-center gap-2 cursor-pointer transition-colors ${
-                          col.accessor ? 'hover:text-indigo-600' : ''
-                        }`}
+                        className={`flex items-center gap-2 cursor-pointer transition-colors ${col.accessor ? 'hover:text-indigo-600' : ''}`}
                         onClick={() => col.accessor && requestSort(col.accessor)}
                       >
-                        <span className="text-xs font-bold uppercase tracking-wider text-slate-500 group-hover:text-slate-700 transition-colors">
+                        <span className="text-xs font-bold uppercase tracking-wider text-slate-500 hover:text-slate-700 transition-colors">
                           {col.header}
                         </span>
                         {col.accessor && getSortIcon(col.accessor)}
@@ -267,6 +334,7 @@ const TableCard = ({
 
                       {col.accessor && (
                         <button
+                          ref={filterButtonRefs.current[col.accessor]}
                           onClick={(e) => {
                             e.stopPropagation();
                             setActiveFilterColumn(activeFilterColumn === col.accessor ? null : col.accessor);
@@ -281,54 +349,6 @@ const TableCard = ({
                         </button>
                       )}
                     </div>
-
-                    {/* DROPDOWN FILTER */}
-                    {activeFilterColumn === col.accessor && (
-                      <div className="absolute top-full right-0 mt-2 w-64 bg-white rounded-xl shadow-2xl ring-1 ring-black/5 z-30 flex flex-col animate-in fade-in zoom-in-95 duration-100 origin-top-right overflow-hidden">
-                        <div className="px-3 py-2 border-b border-slate-100 bg-slate-50/50 flex justify-between items-center">
-                          <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Filtrar</span>
-                          <button
-                            onClick={() => setActiveFilterColumn(null)}
-                            className="p-1 hover:bg-red-50 hover:text-red-500 rounded transition-colors"
-                          >
-                            <X size={14} />
-                          </button>
-                        </div>
-
-                        <div className="max-h-60 overflow-y-auto p-1.5 space-y-0.5 custom-scrollbar">
-                          {getUniqueValues(col.accessor).map((val, vIdx) => {
-                            const isChecked = filters[col.accessor]?.includes(val);
-                            return (
-                              <label
-                                key={vIdx}
-                                className={`flex items-center space-x-3 px-3 py-2 rounded-lg cursor-pointer text-sm transition-colors ${
-                                  isChecked ? 'bg-indigo-50 text-indigo-700' : 'hover:bg-slate-50 text-slate-600'
-                                }`}
-                              >
-                                <input
-                                  type="checkbox"
-                                  checked={isChecked || false}
-                                  onChange={() => handleFilterChange(col.accessor, val)}
-                                  className="w-4 h-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 transition duration-150 ease-in-out"
-                                />
-                                <span className="truncate select-none">
-                                  {val === '' ? <em className="text-slate-400">Sin valor</em> : val}
-                                </span>
-                              </label>
-                            );
-                          })}
-                        </div>
-
-                        <div className="p-2 border-t border-slate-100 bg-slate-50/30">
-                          <button
-                            onClick={() => clearFilter(col.accessor)}
-                            className="w-full text-xs text-red-500 hover:text-red-600 hover:bg-red-50 font-medium px-3 py-1.5 rounded transition-colors"
-                          >
-                            Limpiar filtro
-                          </button>
-                        </div>
-                      </div>
-                    )}
                   </th>
                 );
               })}
@@ -341,9 +361,7 @@ const TableCard = ({
                 <tr key={rowIndex} className="group hover:bg-indigo-50/30 transition-colors duration-150">
                   {columns.map((col, colIndex) => (
                     <td key={colIndex} className="px-6 py-4 text-sm text-slate-600 align-middle">
-                      {col.render ? (
-                        col.render(row)
-                      ) : (
+                      {col.render ? col.render(row) : (
                         <span className="text-slate-700 group-hover:text-slate-900">{row?.[col.accessor]}</span>
                       )}
                     </td>
@@ -409,22 +427,26 @@ const TableCard = ({
           </div>
         </div>
       )}
+
+      {/* Portal: dropdown renderizado en document.body, siempre por encima */}
+      {activeFilterColumn && (
+        <FilterDropdown
+          anchorRef={filterButtonRefs.current[activeFilterColumn]}
+          accessor={activeFilterColumn}
+          filters={filters}
+          uniqueValues={getUniqueValues(activeFilterColumn)}
+          onFilterChange={handleFilterChange}
+          onClear={clearFilter}
+          onClose={() => setActiveFilterColumn(null)}
+        />
+      )}
     </div>
   );
 };
 
 const ChevronDownIcon = ({ size }) => (
-  <svg
-    xmlns="http://www.w3.org/2000/svg"
-    width={size}
-    height={size}
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="2"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-  >
+  <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24"
+    fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <path d="m6 9 6 6 6-6" />
   </svg>
 );

@@ -8,6 +8,7 @@ import {
   Layers, 
   Radio,
   FileCode,
+  Power,
   Info,
   Library
 } from 'lucide-react';
@@ -19,6 +20,7 @@ import KiwiView from './views/KiwiView';
 import InfoView from './views/InfoView';
 import PoolView from './views/PoolView';
 import RenView from './views/RenView';
+import InstView from './views/InstView';
 
 // ==========================================
 // COMPONENTE PRINCIPAL APP
@@ -46,6 +48,7 @@ const App = () => {
       case 'kiwi': return <KiwiView />;
       case 'versions': return <InfoView />; 
       case 'ren': return <RenView />
+      case 'inst': return <InstView />
       default: return <M2MView />;
     }
   };
@@ -74,6 +77,13 @@ const App = () => {
       items: [
         { label: 'Versiones', id: 'versions', icon: <Info size={16} /> },
       ]
+    },
+    {
+      title: 'INSTALACIONES',
+      icon: <Power size={18} />,
+      items: [
+        { label: 'Instalaciones', id: 'inst', icon: <Power size={16} /> },
+      ] 
     }
   ];
 

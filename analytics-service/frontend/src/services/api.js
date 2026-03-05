@@ -23,6 +23,7 @@ export const api = {
   getInfo: (page, limit) => fetchEndpoint('info', page, limit),
   getM2M: (page, limit) => fetchEndpoint('m2m', page, limit),
   getPool: (page, limit) => fetchEndpoint('pools', page, limit),
+  getInst: (page, limit) => fetchEndpoint('installations', page, limit),
 
   // --- NUEVA LÓGICA DE RENOVACIONES ---
   getRenewals: async (page, limit) => {
@@ -33,13 +34,8 @@ export const api = {
         fetchEndpoint('renewals/plan', page, limit)
       ]);
 
-      // FastAPI devuelve { data: [...], all_data: [...], total: X }
-      // Extraemos los arrays (priorizando 'all_data' si quieres todo para las gráficas, 
-      // o 'data' si prefieres la versión paginada).
       const m2mArray = m2mResponse?.all_data || m2mResponse?.data || [];
       const planArray = planResponse?.all_data || planResponse?.data || [];
-
-      // Unimos ambos arrays y se los pasamos a React como una sola lista plana
       return [...m2mArray, ...planArray];
     } catch (error) {
       console.error("Error al obtener las renovaciones combinadas:", error);

@@ -3,6 +3,40 @@ import React, { useMemo, useRef } from "react";
 import { Bar } from "react-chartjs-2";
 // Nota: Asegúrate de tener registrados los componentes de ChartJS en tu app (ChartJS.register(...))
 
+const Legend = ({ legendRows, legendTitleText, listHeightClass, getColor, selectedLabel, onBarClick }) => (
+  <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 w-full flex flex-col h-full">
+    <h4 className="text-xs font-bold text-gray-500 uppercase mb-2 pb-2 border-b flex-shrink-0">
+      {legendTitleText}
+    </h4>
+    {/* AQUÍ ESTÁ EL CAMBIO CLAVE:
+       Aplicamos la clase de altura (ej. h-96) directamente al contenedor de la lista.
+       Esto fuerza a que el scroll aparezca cuando el contenido excede esa altura,
+       en lugar de empujar el contenedor padre.
+    */}
+    <div className={`overflow-y-auto flex-grow pr-2 ${listHeightClass}`}>
+      {legendRows.map((r, idx) => {
+        const color = typeof getColor === "function" ? getColor(idx, r) : "#94a3b8";
+        const isSelected = selectedLabel && String(selectedLabel) === String(r.__label);
+
+        return (
+          <button
+            key={`${r.__label}-${idx}`}
+            type="button"
+            onClick={() => typeof onBarClick === "function" && onBarClick(r.__label, r, idx)}
+            className={`w-full text-left flex items-center py-2 px-2 rounded border-b border-gray-100 transition-colors text-sm
+              ${isSelected ? "bg-blue-100/60" : "hover:bg-gray-100"}`}
+            title={r.__label}
+          >
+            <div className="w-3 h-3 rounded-full mr-3 flex-shrink-0" style={{ backgroundColor: color }} />
+            <span className="flex-grow text-gray-700 font-medium truncate mr-2">{r.__label}</span>
+            <span className="font-bold text-blue-900">{r.__value}</span>
+          </button>
+        );
+      })}
+    </div>
+  </div>
+);
+
 const BarChartCard = ({
   title,
   subtitle,
@@ -100,41 +134,6 @@ const BarChartCard = ({
     [indexAxis, onBarClick, chartData.labels, rows]
   );
 
-  // MODIFICADO: Aceptamos heightClass para sincronizar la altura
-  const Legend = ({ legendRows, legendTitleText, listHeightClass }) => (
-    <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 w-full flex flex-col h-full">
-      <h4 className="text-xs font-bold text-gray-500 uppercase mb-2 pb-2 border-b flex-shrink-0">
-        {legendTitleText}
-      </h4>
-      {/* AQUÍ ESTÁ EL CAMBIO CLAVE:
-         Aplicamos la clase de altura (ej. h-96) directamente al contenedor de la lista.
-         Esto fuerza a que el scroll aparezca cuando el contenido excede esa altura,
-         en lugar de empujar el contenedor padre.
-      */}
-      <div className={`overflow-y-auto flex-grow pr-2 ${listHeightClass}`}>
-        {legendRows.map((r, idx) => {
-          const color = typeof getColor === "function" ? getColor(idx, r) : "#94a3b8";
-          const isSelected = selectedLabel && String(selectedLabel) === String(r.__label);
-
-          return (
-            <button
-              key={`${r.__label}-${idx}`}
-              type="button"
-              onClick={() => typeof onBarClick === "function" && onBarClick(r.__label, r, idx)}
-              className={`w-full text-left flex items-center py-2 px-2 rounded border-b border-gray-100 transition-colors text-sm
-                ${isSelected ? "bg-blue-100/60" : "hover:bg-gray-100"}`}
-              title={r.__label}
-            >
-              <div className="w-3 h-3 rounded-full mr-3 flex-shrink-0" style={{ backgroundColor: color }} />
-              <span className="flex-grow text-gray-700 font-medium truncate mr-2">{r.__label}</span>
-              <span className="font-bold text-blue-900">{r.__value}</span>
-            </button>
-          );
-        })}
-      </div>
-    </div>
-  );
-
   return (
     <div className="grid grid-cols-12 gap-6 w-full items-start">
       <div
@@ -162,10 +161,13 @@ const BarChartCard = ({
       {showLegend && (
         // Quitamos min-h-[400px] y h-full estricto del wrapper exterior para evitar conflictos de Grid
         <div className="col-span-12 lg:col-span-3 bg-white p-4 rounded shadow border border-gray-200 w-full">
-          <Legend 
-            legendRows={rows} 
-            legendTitleText={legendTitle} 
-            listHeightClass={heightClass} // Pasamos la misma altura que el gráfico
+          <Legend
+            legendRows={rows}
+            legendTitleText={legendTitle}
+            listHeightClass={heightClass}
+            getColor={getColor}
+            selectedLabel={selectedLabel}
+            onBarClick={onBarClick}
           />
         </div>
       )}

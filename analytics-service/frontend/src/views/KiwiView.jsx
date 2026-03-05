@@ -87,11 +87,6 @@ const KiwiView = () => {
     return data;
   }, [rawData, selectedSoftware, drilldownSoftware, drilldownStatus, searchTerm]);
 
-  // Reset page
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [selectedSoftware, searchTerm, rowsPerPage, drilldownSoftware, drilldownStatus]);
-
   // --- PAGINACIÓN ---
   const totalItems = filteredData.length;
   const totalPages = Math.max(1, Math.ceil(totalItems / rowsPerPage));
@@ -169,6 +164,7 @@ const KiwiView = () => {
                 setSelectedSoftware(e.target.value);
                 setDrilldownSoftware(null);
                 setDrilldownStatus(null);
+                setCurrentPage(1);
               }}
             >
               <option value="Todos">Todos los Softwares</option>
@@ -187,6 +183,7 @@ const KiwiView = () => {
                 setSearchTerm('');
                 setDrilldownSoftware(null);
                 setDrilldownStatus(null);
+                setCurrentPage(1);
               }}
               className="mt-6 md:mt-0 px-4 py-2.5 bg-red-100 text-red-700 rounded hover:bg-red-200 text-sm font-bold border border-red-200 transition-colors"
             >
@@ -242,6 +239,7 @@ const KiwiView = () => {
                 onBarClick={(label) => {
                   setDrilldownSoftware(label);
                   setDrilldownStatus(null);
+                  setCurrentPage(1);
                 }}
               />
             ),
@@ -265,6 +263,7 @@ const KiwiView = () => {
                 onSliceClick={(label) => {
                   setDrilldownStatus(label);
                   setDrilldownSoftware(null);
+                  setCurrentPage(1);
                 }}
               />
             ),
@@ -285,7 +284,7 @@ const KiwiView = () => {
               placeholder="Buscar por UUID, SSID, Modelo..."
               className="pl-10 pr-4 py-2 border border-gray-300 rounded-md w-full focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
               value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
+              onChange={(e) => { setSearchTerm(e.target.value); setCurrentPage(1); }}
             />
           </div>
 
@@ -294,7 +293,7 @@ const KiwiView = () => {
             <select
               className="border border-gray-300 rounded-md py-1 px-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
               value={rowsPerPage}
-              onChange={(e) => setRowsPerPage(Number(e.target.value))}
+              onChange={(e) => { setRowsPerPage(Number(e.target.value)); setCurrentPage(1); }}
             >
               <option value={5}>5</option>
               <option value={10}>10</option>
@@ -329,7 +328,7 @@ const KiwiView = () => {
             {
               header: 'Versión ID',
               accessor: 'version_uuid',
-              render: (row) => <span className="font-mono text-xs text-gray-400">{row.version_uuid ? `${row.version_uuid.substring(0, 8)}...` : '-'}</span>,
+              render: (row) => <span className="font-mono text-xs text-gray-400">{row.version_uuid ? row.version_uuid : '-'}</span>,
             },
           ]}
           loading={loading}

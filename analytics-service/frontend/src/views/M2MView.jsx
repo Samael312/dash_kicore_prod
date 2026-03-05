@@ -5,7 +5,7 @@ import TableCard from '../components/TableCard';
 import BarChartCard from '../components/BarChartCard';
 import PieChartCard from '../components/PieChartCard';
 import SelectDash from '../components/SelectDash';
-import { getConsistentColor, COLORS } from '../utils/colors';
+import { getConsistentColor, COLORS, getOrgColor } from '../utils/colors';
 import { Loader2 } from 'lucide-react';
 
 import {
@@ -85,20 +85,6 @@ const M2MView = () => {
   }, [rawData, selectedOrg, drilldownStatus, drilldownNetwork, drilldownCountry, drilldownPlan, drilldownTier, activeTab]);
 
   // Reset de página al cambiar filtros externos / búsqueda / pageSize
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [
-    selectedOrg,
-    drilldownStatus,
-    drilldownNetwork,
-    drilldownCountry,
-    drilldownPlan,
-    drilldownTier,
-    activeTab,
-    rowsPerPage,
-    searchTerm,
-  ]);
-
   const totalItems = filteredByControls.length;
   const totalPages = Math.max(1, Math.ceil(totalItems / rowsPerPage));
 
@@ -181,6 +167,7 @@ const M2MView = () => {
                 setDrilldownCountry(null);
                 setDrilldownPlan(null);
                 setDrilldownTier(null);
+                setCurrentPage(1);
               }}
             >
               <option value="Todas">Todas</option>
@@ -200,6 +187,7 @@ const M2MView = () => {
                 setDrilldownCountry(null);
                 setDrilldownPlan(null);
                 setDrilldownTier(null);
+                setCurrentPage(1);
               }}
               className="px-4 py-2.5 bg-red-100 text-red-700 rounded hover:bg-red-200 text-sm font-bold border border-red-200 transition-colors"
             >
@@ -258,6 +246,7 @@ const M2MView = () => {
                   setDrilldownCountry(null);
                   setDrilldownPlan(null);
                   setDrilldownTier(null);
+                  setCurrentPage(1);
                 }}
               />
             ),
@@ -282,6 +271,7 @@ const M2MView = () => {
                   setDrilldownCountry(null);
                   setDrilldownPlan(null);
                   setDrilldownTier(null);
+                  setCurrentPage(1);
                 }}
               />
             ),
@@ -307,6 +297,7 @@ const M2MView = () => {
                   setDrilldownNetwork(null);
                   setDrilldownPlan(null);
                   setDrilldownTier(null);
+                  setCurrentPage(1);
                 }}
               />
             ),
@@ -331,6 +322,7 @@ const M2MView = () => {
                   setDrilldownNetwork(null);
                   setDrilldownCountry(null);
                   setDrilldownTier(null);
+                  setCurrentPage(1);
                 }}
               />
             ),
@@ -351,6 +343,7 @@ const M2MView = () => {
                     onClick={() => {
                       setActiveTab('diario');
                       setDrilldownTier(null);
+                      setCurrentPage(1);
                     }}
                   >
                     📅 Diario
@@ -362,6 +355,7 @@ const M2MView = () => {
                     onClick={() => {
                       setActiveTab('mensual');
                       setDrilldownTier(null);
+                      setCurrentPage(1);
                     }}
                   >
                     🗓️ Mensual
@@ -388,6 +382,7 @@ const M2MView = () => {
                     setDrilldownNetwork(null);
                     setDrilldownCountry(null);
                     setDrilldownPlan(null);
+                    setCurrentPage(1);
                   }}
                 />
               </div>
@@ -403,7 +398,24 @@ const M2MView = () => {
         columns={[
           { header: 'ICCID', accessor: 'icc', render: (r) => <span className="font-mono text-xs text-gray-600">{r.icc}</span> },
           { header: 'Estado', accessor: 'status_clean', render: (r) => renderStatusBadge(r) },
-          { header: 'Org', accessor: 'organization' },
+          { header: 'Organización', accessor: 'organization',
+             render: (r) => {
+                                     const color = getOrgColor(r.organization);
+                                     const hasCorp = color !== '#94a3b8';
+                                     return (
+                                       <span
+                                         className="px-2 py-1 rounded text-xs font-bold uppercase tracking-wide whitespace-nowrap"
+                                         style={{
+                                           backgroundColor: `${color}18`,
+                                           color,
+                                           border: `1px solid ${color}40`,
+                                         }}
+                                       >
+                                         {r.organization || 'SIN ASIGNAR'}
+                                       </span>
+                                     );
+                                   },
+           },
           { header: 'País', accessor: 'country_code' },
           { header: 'Plan', accessor: 'rate_plan' },
           {
@@ -471,11 +483,11 @@ const M2MView = () => {
         loading={loading}
         enableToolbar
         searchTerm={searchTerm}
-        setSearchTerm={setSearchTerm}
+        setSearchTerm={val => { setSearchTerm(val); setCurrentPage(1); }}
         searchPlaceholder="Buscar por ICCID, Estado, Plan..."
         searchableKeys={['icc', 'status_clean', 'organization', 'country_code', 'rate_plan', 'network_type']}
         pageSize={rowsPerPage}
-        setPageSize={setRowsPerPage}
+        setPageSize={val => { setRowsPerPage(val); setCurrentPage(1); }}
         rowsPerPageOptions={[5, 10, 25, 50, 100]}
         currentPage={currentPage}
         setCurrentPage={setCurrentPage}

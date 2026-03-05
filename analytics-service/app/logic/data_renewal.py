@@ -33,6 +33,7 @@ def _status_label(val) -> str:
         "active": "Activa",
         "inactive": "Inactiva",
         "cancelled": "Cancelada",
+        "expired": "Expirada",
         "not-applicable": "No Aplicable",
         "not applicable": "No Aplicable",
         "unknown": "Desconocido",
@@ -122,7 +123,10 @@ def _enrich_devices_models(df_base: pd.DataFrame, raw_devices, raw_models, raw_s
         mask_still = df_devices["model_name"].isin(["Desconocido", None, np.nan])
         df_devices.loc[mask_still, "model_name"] = df_devices.loc[mask_still, "ssid"]
 
-   
+    # Asignar final_client desde order_id si final_client está vacío
+    if "final_client" in df_devices.columns:
+        df_devices["final_client"] = df_devices["final_client"].fillna(df_devices["order_id"])
+
     cols_dev = ["uuid", "model_name", "final_client", "name", "organization"]
     cols_dev = [c for c in cols_dev if c in df_devices.columns]
 
@@ -133,7 +137,7 @@ def _enrich_devices_models(df_base: pd.DataFrame, raw_devices, raw_models, raw_s
     else:
         df_out["model_name"] = df_out["model_name"].fillna("Dispositivo no encontrado")
 
-    if "final_client" not in df_out.columns:
+    if "final_client" not in df_out.columns or df_out["final_client"].str.contains('-', na=False).any():
         df_out["final_client"] = None
     
 

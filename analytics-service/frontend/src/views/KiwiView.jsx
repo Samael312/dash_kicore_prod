@@ -328,7 +328,7 @@ const KiwiView = () => {
             {
               header: 'Versión ID',
               accessor: 'version_uuid',
-              render: (row) => <span className="font-mono text-xs text-gray-400">{row.version_uuid ? `${row.version_uuid.substring(0, 8)}...` : '-'}</span>,
+              render: (row) => <span className="font-mono text-xs text-gray-400">{row.version_uuid ? row.version_uuid : '-'}</span>,
             },
           ]}
           loading={loading}

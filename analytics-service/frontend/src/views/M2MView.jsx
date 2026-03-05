@@ -5,7 +5,7 @@ import TableCard from '../components/TableCard';
 import BarChartCard from '../components/BarChartCard';
 import PieChartCard from '../components/PieChartCard';
 import SelectDash from '../components/SelectDash';
-import { getConsistentColor, COLORS } from '../utils/colors';
+import { getConsistentColor, COLORS, getOrgColor } from '../utils/colors';
 import { Loader2 } from 'lucide-react';
 
 import {
@@ -398,7 +398,24 @@ const M2MView = () => {
         columns={[
           { header: 'ICCID', accessor: 'icc', render: (r) => <span className="font-mono text-xs text-gray-600">{r.icc}</span> },
           { header: 'Estado', accessor: 'status_clean', render: (r) => renderStatusBadge(r) },
-          { header: 'Org', accessor: 'organization' },
+          { header: 'Organización', accessor: 'organization',
+             render: (r) => {
+                                     const color = getOrgColor(r.organization);
+                                     const hasCorp = color !== '#94a3b8';
+                                     return (
+                                       <span
+                                         className="px-2 py-1 rounded text-xs font-bold uppercase tracking-wide whitespace-nowrap"
+                                         style={{
+                                           backgroundColor: `${color}18`,
+                                           color,
+                                           border: `1px solid ${color}40`,
+                                         }}
+                                       >
+                                         {r.organization || 'SIN ASIGNAR'}
+                                       </span>
+                                     );
+                                   },
+           },
           { header: 'País', accessor: 'country_code' },
           { header: 'Plan', accessor: 'rate_plan' },
           {

@@ -33,6 +33,7 @@ def _status_label(val) -> str:
         "active": "Activa",
         "inactive": "Inactiva",
         "cancelled": "Cancelada",
+        "expired": "Expirada",
         "not-applicable": "No Aplicable",
         "not applicable": "No Aplicable",
         "unknown": "Desconocido",

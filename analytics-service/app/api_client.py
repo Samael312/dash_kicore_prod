@@ -94,6 +94,9 @@ class CoreClient:
     def get_deviceSoftware(self):
         return self._get_data(Settings.URL_VERSION_K, "resources/software.xlsx")
     
+    def get_installations(self):
+        return self._get_data(Settings.URL_INSTAL, "resources/installations.xlsx")
+    
     def get_m2m_history(self, icc, payload):
         url = Settings.URL_HISTORY.format(icc=icc)
         return self._post(url, json_payload=payload)

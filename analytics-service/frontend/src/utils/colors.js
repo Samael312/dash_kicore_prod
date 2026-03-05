@@ -4,10 +4,17 @@ export const COLORS = [
 ];
 
 export const CorpColors = {
-  KICONEX: 'font-bold text-blue-400',
-  INTARCON: 'font-bold text-blue-800',
-  GENAQ: 'font-bold text-purple-900',
-  KEYTER: 'font-bold text-green-600',
+  KICONEX: '#658eb9',   
+  INTARCON: '#0086be',  
+  GENAQ: '#0c0091',     
+  KEYTER: '#5aaf32',    
 }
-
+export const getOrgColor = (orgName) => {
+  if (!orgName) return '#94a3b8';
+  const upper = orgName.toUpperCase();
+  for (const [key, color] of Object.entries(CorpColors)) {
+    if (upper.includes(key)) return color;
+  }
+  return '#94a3b8';
+};
 export const getConsistentColor = (index) => COLORS[index % COLORS.length];

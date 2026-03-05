@@ -12,7 +12,7 @@ from app.logic.data_info import process_devicesInfo
 from app.logic.data_m2m import process_m2m
 from app.logic.data_pool import process_pools
 from app.logic.data_renewal import process_m2m_renewals_logic, process_plan_renewals_logic  
-
+from app.logic.data_inst import process_installations
 # Instancia global del cliente
 client = CoreClient()
 
@@ -309,6 +309,25 @@ def get_plan_renewals_dashboard(
         }
 
     except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/internal/dashboard/installations")
+def get_installations_dashboard(
+    limit: int = Query(5000, ge=1),
+    offset: int = Query(0, ge=0)
+):
+    raw_installations = client.get_installations()
+    try:
+        df_final = process_installations(raw_installations)
+        
+        # Paginación
+        df_final = paginate_df(df_final, limit, offset)
+        
+        return df_final.to_dict(orient="records")
+    except Exception as e:
+        print(f"❌ Error en Installations: {e}")
+        import traceback
+        traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
 
 if __name__ == "__main__":

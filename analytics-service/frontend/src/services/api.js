@@ -23,6 +23,7 @@ export const api = {
   getInfo: (page, limit) => fetchEndpoint('info', page, limit),
   getM2M: (page, limit) => fetchEndpoint('m2m', page, limit),
   getPool: (page, limit) => fetchEndpoint('pools', page, limit),
+  getInst: (page, limit) => fetchEndpoint('installations', page, limit),
 
   // --- NUEVA LÓGICA DE RENOVACIONES ---
   getRenewals: async (page, limit) => {

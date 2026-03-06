@@ -1,8 +1,9 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { api } from '../services/api'; // Asegúrate de que esta ruta sea correcta
-import { Layers, Activity, Search, Loader2, ChevronDown, ChevronRight } from 'lucide-react';
+import { api } from '../services/api';
+import { Layers, Activity, Search, Loader2, ChevronRight, Copy } from 'lucide-react';
 import TableCard from '../components/TableCard';
 import SelectDash from '../components/SelectDash';
+import { getOrgColor } from '../utils/colors';
 
 import { Line } from 'react-chartjs-2';
 import {
@@ -24,48 +25,38 @@ import {
   YAxis,
   CartesianGrid,
   Tooltip,
-  Legend,
   ResponsiveContainer,
-  Cell,
 } from 'recharts';
 
-// Registro de ChartJS
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Title, ChartTooltip, ChartLegend, Filler);
 
-// --- UTILIDADES DE COLOR Y ESTADO (Unificadas) ---
+// --- UTILIDADES DE COLOR Y ESTADO ---
 
-// Devuelve configuración de color basada en el porcentaje
 const getStatusConfig = (percent) => {
-  // CRÍTICO (> 90%)
-  if (percent > 90) return { hex: '#ba0c0c', tailwind: 'text-red-600 font-extrabold', label: 'Crítico' };
-  
-  // ADVERTENCIA (75% - 90%)
-  if (percent > 65) return { hex: '#f72424', tailwind: 'text-red-500 font-bold', label: 'Alto' };
-  
-  // PRECAUCIÓN (50% - 75%)
-  if (percent > 50) return { hex: '#f97316', tailwind: 'text-orange-600 font-bold', label: 'Medio' };
-
-   if (percent === 0) return { hex: '#eab308', tailwind: 'text-yellow-600 font-medium', label: 'Medio' };
-  
-  // NORMAL (< 50%)
-  return { hex: '#0dbb0e', tailwind: 'text-green-600', label: 'Normal' };
+  if (percent === 0) {
+    return { hex: '#eab308', tailwind: 'text-yellow-600 font-medium', label: 'Sin Consumo' };
+  }
+  if (percent >= 90) {
+    return { hex: '#ba0c0c', tailwind: 'text-red-700 font-extrabold', label: 'Crítico' };
+  }
+  if (percent >= 65) {
+    return { hex: '#f72424', tailwind: 'text-red-500 font-bold', label: 'Alto' };
+  }
+  if (percent >= 40) {
+    return { hex: '#f97316', tailwind: 'text-orange-600 font-bold', label: 'Medio' };
+  }
+  return { hex: '#0dbb0e', tailwind: 'text-green-600 font-semibold', label: 'Normal' };
 };
 
-// Wrapper para compatibilidad con las gráficas antiguas que solo esperan HEX
 const getBarColor = (percent) => getStatusConfig(percent).hex;
 
-// Función auxiliar para procesar datos de SIM (Extraída para evitar recreación)
 const processSimData = (s) => {
   const val = Number(s.cons_month_mb) || 0;
   let planName = (s.rate_plan || '').toLowerCase();
-  
-  // 1. Limpieza
   planName = planName.replace(/m2m/g, '').replace(/b2b/g, '');
 
-  // 2. Detección de límite
   let limit = 0;
   const matchGB = planName.match(/\b(\d+)\s*gb/);
-  
   if (matchGB) {
     limit = parseInt(matchGB[1]) * 1024;
   } else {
@@ -73,132 +64,226 @@ const processSimData = (s) => {
     if (matchMB) {
       limit = parseInt(matchMB[1]);
     } else {
-      const matchNum = planName.match(/\b(\d{2,})\b/); 
+      const matchNum = planName.match(/\b(\d{2,})\b/);
       if (matchNum) limit = parseInt(matchNum[1]);
     }
   }
 
-  // 3. Lógica de colores y porcentajes
   let percent = 0;
   let status = { tailwind: 'text-gray-600', hex: '#9ca3af' };
-
   if (limit > 0) {
     percent = (val / limit) * 100;
     status = getStatusConfig(percent);
   }
 
-  return { 
-    ...s, 
-    val, 
-    limit, 
-    percent, 
-    colorClass: status.tailwind, // Clase de texto para la lista
-    barColor: status.hex         // Color hex por si se quisiera usar en barras mini
-  };
+  return { ...s, val, limit, percent, colorClass: status.tailwind, barColor: status.hex };
+};
+
+// --- TOOLTIP PERSONALIZADO ---
+const CustomTooltip = ({ active, payload }) => {
+  if (!active || !payload?.length) return null;
+  const row = payload[0]?.payload;
+  if (!row) return null;
+  const { hex, label } = getStatusConfig(row.percent);
+  return (
+    <div className="bg-white border border-gray-200 rounded-lg shadow-lg px-4 py-3 text-xs min-w-[190px]">
+      <div className="font-bold text-gray-800 mb-2 border-b pb-1.5 truncate">{row.commercialGroup}</div>
+      <div className="space-y-1.5">
+        {payload.map((p, i) => (
+          <div key={i} className="flex justify-between gap-6 items-center">
+            <div className="flex items-center gap-1.5">
+              <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: p.fill || p.color }} />
+              <span className="text-gray-500">{p.name}</span>
+            </div>
+            <span className="font-bold text-gray-800 tabular-nums">{p.value} GB</span>
+          </div>
+        ))}
+        <div className="pt-1.5 border-t flex items-center justify-between">
+          <span className="text-gray-400">Uso</span>
+          <span className="font-extrabold tabular-nums" style={{ color: hex }}>
+            {row.percent.toFixed(1)}% — {label}
+          </span>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// --- LEYENDA DE ESTADOS ---
+const STATUS_LEGEND = [
+  { color: '#0dbb0e', label: 'Normal',      range: '< 40%' },
+  { color: '#f97316', label: 'Medio',       range: '40–64%' },
+  { color: '#f72424', label: 'Alto',        range: '65–89%' },
+  { color: '#ba0c0c', label: 'Crítico',     range: '≥ 90%' },
+  { color: '#eab308', label: 'Sin consumo', range: '0%' },
+];
+
+// --- HELPER: copiar al portapapeles ---
+const copyToClipboard = (e, text) => {
+  e.stopPropagation();
+  navigator.clipboard.writeText(text);
 };
 
 // --- COMPONENTE ORG LEGEND ---
 const OrgLegend = ({ orgRows, expandedOrg, setExpandedOrg }) => {
   const [filterText, setFilterText] = useState('');
+  const [expandedKey, setExpandedKey] = useState(null);
+  const [copied, setCopied] = useState(null);
+
+  const handleCopy = (e, key) => {
+    copyToClipboard(e, key);
+    setCopied(key);
+    setTimeout(() => setCopied(null), 1500);
+  };
 
   return (
-    <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-200 h-[600px] overflow-hidden flex flex-col">
-      <div className="flex flex-col gap-2 mb-2 pb-2 border-b">
-        <div className="flex items-center justify-between">
-          <h4 className="text-sm font-bold text-blue-700">Organizaciones</h4>
-          <span className="text-[11px] text-gray-400">{orgRows.length}</span>
-        </div>
-        
-        {/* INPUT DE BÚSQUEDA */}
-        <div className="relative">
+    <div
+      className="bg-white border border-gray-100 rounded-xl h-[620px] flex flex-col overflow-hidden"
+      style={{ boxShadow: '0 4px 24px 0 rgba(59,130,246,0.07)' }}
+    >
+      {/* Cabecera */}
+      <div
+        className="px-5 py-4 border-b border-gray-100 flex-shrink-0"
+        style={{ background: 'linear-gradient(135deg, #f0f6ff 0%, #f8fafc 100%)' }}
+      >
+        <h4 className="text-xs font-bold text-blue-700 uppercase tracking-widest flex items-center gap-2">
+          <span className="bg-blue-100 rounded-lg p-1.5 flex items-center justify-center">
+            <Layers size={14} className="text-blue-500" />
+          </span>
+          Organizaciones
+          <span className="ml-auto text-[10px] font-bold bg-blue-100 text-blue-500 px-2 py-0.5 rounded-full normal-case tracking-normal">
+            {orgRows.length}
+          </span>
+        </h4>
+
+        {/* Buscador */}
+        <div className="relative mt-3">
           <input
             type="text"
-            placeholder="Filtrar por ICC o Nombre..."
+            placeholder="Filtrar por ICC o nombre..."
             value={filterText}
             onChange={(e) => setFilterText(e.target.value)}
-            className="w-full pl-7 pr-2 py-1 text-xs border border-gray-300 rounded focus:outline-none focus:border-blue-500"
+            className="w-full pl-7 pr-2 py-1.5 text-xs border border-blue-100 rounded-lg bg-white focus:outline-none focus:border-blue-400 placeholder-gray-300"
           />
-          <Search size={12} className="absolute left-2 top-1.5 text-gray-400" />
+          <Search size={12} className="absolute left-2 top-2 text-blue-300" />
         </div>
       </div>
 
-      <div className="overflow-y-auto pr-1">
-        {orgRows.map((row) => {
-          const open = String(expandedOrg) === String(row.commercialGroup);
-          
-          // Procesamos las SIMs
-          const processedSims = row.sims.map(processSimData);
+      {/* Lista */}
+      <div className="overflow-y-auto flex-grow p-2.5 space-y-1">
+        {orgRows.length === 0 ? (
+          <div className="h-full flex flex-col items-center justify-center gap-3 p-4 text-center">
+            <div className="bg-gray-50 rounded-full p-4">
+              <Search size={24} className="text-gray-300" />
+            </div>
+            <p className="text-xs text-gray-400 leading-relaxed">Sin organizaciones<br />que mostrar</p>
+          </div>
+        ) : (
+          orgRows.map((row) => {
+            const open = String(expandedOrg) === String(row.commercialGroup);
+            const processedSims = row.sims.map(processSimData);
+            const filteredSims = processedSims.filter((s) => {
+              if (!filterText) return true;
+              const term = filterText.toLowerCase();
+              return (s.icc || '').toLowerCase().includes(term) || (s.label || '').toLowerCase().includes(term);
+            });
+            const sortedSims = filteredSims.sort((a, b) => b.val - a.val);
+            if (filterText && sortedSims.length === 0) return null;
 
-          // Filtramos
-          const filteredSims = processedSims.filter(s => {
-            if (!filterText) return true;
-            const term = filterText.toLowerCase();
             return (
-              (s.icc || '').toLowerCase().includes(term) ||
-              (s.label || '').toLowerCase().includes(term)
-            );
-          });
-
-          // Ordenar por consumo descendente
-          const sortedSims = filteredSims.sort((a, b) => b.val - a.val);
-
-          // Si hay filtro activo y no hay resultados en este grupo, no renderizamos
-          if (filterText && sortedSims.length === 0) return null;
-
-          return (
-            <div key={row.commercialGroup} className="border border-gray-100 rounded mb-2 overflow-hidden">
-              <button
-                type="button"
-                onClick={() => setExpandedOrg(open ? null : row.commercialGroup)}
-                className={`w-full flex items-center justify-between px-3 py-2 text-left transition-colors ${
-                  open ? 'bg-blue-50' : 'hover:bg-gray-50'
-                }`}
-                title={row.commercialGroup}
+              <div
+                key={row.commercialGroup}
+                className="border border-gray-100 rounded-lg bg-white overflow-hidden transition-all hover:border-blue-100"
+                style={{ boxShadow: '0 1px 4px 0 rgba(0,0,0,0.04)' }}
               >
-                <div className="flex items-center gap-2 min-w-0">
-                  {open ? <ChevronDown size={14} className="text-blue-600" /> : <ChevronRight size={14} className="text-gray-400" />}
-                  <span className="text-xs font-bold text-gray-700 truncate">{row.commercialGroup}</span>
-                </div>
-
-                <div className="flex items-center gap-2 flex-shrink-0">
-                  <span className="text-[11px] bg-gray-100 text-gray-700 px-2 py-0.5 rounded font-bold">
+                {/* Fila org */}
+                <div
+                  onClick={() => setExpandedOrg(open ? null : row.commercialGroup)}
+                  className={`flex items-center justify-between py-2.5 px-3 cursor-pointer transition-colors ${
+                    open ? 'bg-blue-50' : 'hover:bg-slate-50'
+                  }`}
+                  title={row.commercialGroup}
+                >
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span className={`transition-transform duration-200 ${open ? 'rotate-90' : ''}`}>
+                      <ChevronRight size={13} className={open ? 'text-blue-500' : 'text-gray-300'} />
+                    </span>
+                    <span className={`text-xs font-semibold truncate ${open ? 'text-blue-700' : 'text-gray-600'}`}>
+                      {row.commercialGroup}
+                    </span>
+                  </div>
+                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full flex-shrink-0 ${
+                    open ? 'bg-blue-100 text-blue-600' : 'bg-gray-100 text-gray-500'
+                  }`}>
                     {filterText ? sortedSims.length : row.simsCount} SIMs
                   </span>
                 </div>
-              </button>
 
-              {open && (
-                <div className="bg-white border-t border-gray-100 px-3 py-2">
-                  {sortedSims.length === 0 ? (
-                    <div className="text-xs text-gray-400 py-1">Sin SIMs asociadas</div>
-                  ) : (
-                    <ul className="space-y-1 max-h-[320px] overflow-y-auto pr-1">
-                      {sortedSims.map((s) => (
-                        <li key={s._key} className="flex items-center justify-between gap-2 text-xs py-1 border-b border-gray-50 last:border-0">
-                          <span className="truncate text-gray-700" title={s.label}>
-                            {s.label}
-                          </span>
-                          
-                          {/* Renderizado del valor calculado */}
-                          <div className="flex flex-col text-right">
-                            <span className={`${s.colorClass} tabular-nums`}>
-                              {s.val.toFixed(2)} MB
-                            </span>
-                            {s.limit > 0 && (
-                              <span className="text-[9px] text-gray-400">
-                                {Math.round(s.percent)}% de {s.limit < 1024 ? s.limit + 'MB' : (s.limit/1024) + 'GB'}
-                              </span>
-                            )}
-                          </div>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                </div>
-              )}
-            </div>
-          );
-        })}
+                {/* SIMs desplegadas */}
+                {open && (
+                  <div className="bg-gradient-to-b from-blue-50/60 to-white border-t border-blue-100 p-2 space-y-0.5">
+                    {sortedSims.length === 0 ? (
+                      <div className="text-xs text-gray-400 py-1 px-1">Sin SIMs asociadas</div>
+                    ) : (
+                      <ul className="max-h-[300px] overflow-y-auto pr-0.5 space-y-0.5">
+                        {sortedSims.map((s) => {
+                          const keyOpen = expandedKey === s._key;
+                          return (
+                            <li
+                              key={s.final_client}
+                              className="flex flex-col text-xs rounded-md px-2 py-1.5 bg-white border border-gray-50 hover:border-blue-100 transition-colors"
+                              style={{ boxShadow: '0 1px 2px 0 rgba(0,0,0,0.03)' }}
+                            >
+                              <div className="flex items-center justify-between gap-2">
+                                <button
+                                  type="button"
+                                  onClick={() => setExpandedKey(keyOpen ? null : s._key)}
+                                  className="truncate text-left text-blue-600 hover:text-blue-800 hover:underline font-medium"
+                                  title="Ver ICC"
+                                >
+                                  {s.final_client || '-'}
+                                </button>
+                                <div className="flex flex-col text-right flex-shrink-0">
+                                  <span className={`${s.colorClass} tabular-nums`}>{s.val.toFixed(2)} MB</span>
+                                  {s.limit > 0 && (
+                                    <span className="text-[9px] text-gray-400">
+                                      {Math.round(s.percent)}% de {s.limit < 1024 ? s.limit + 'MB' : s.limit / 1024 + 'GB'}
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+
+                              {/* ICC desplegable con botón copiar */}
+                              {keyOpen && (
+                                <div className="mt-1 flex items-center gap-1">
+                                  <span className="flex-1 font-mono text-[10px] text-blue-400 bg-blue-50 px-2 py-0.5 rounded-md select-all border border-blue-100 truncate">
+                                    {s._key}
+                                  </span>
+                                  <button
+                                    type="button"
+                                    onClick={(e) => handleCopy(e, s._key)}
+                                    className={`p-1 rounded transition-colors flex-shrink-0 ${
+                                      copied === s._key
+                                        ? 'text-green-500 bg-green-50'
+                                        : 'text-gray-400 hover:text-blue-500 hover:bg-blue-50'
+                                    }`}
+                                    title="Copiar ICC"
+                                  >
+                                    <Copy size={10} />
+                                  </button>
+                                </div>
+                              )}
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    )}
+                  </div>
+                )}
+              </div>
+            );
+          })
+        )}
       </div>
     </div>
   );
@@ -212,21 +297,14 @@ const PoolView = () => {
   const [rawM2M, setRawM2M] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  // Filtro externo
   const [selectedOrg, setSelectedOrg] = useState('ALL');
-
-  // Drilldown desde barras
   const [drillOrganization, setDrillOrganization] = useState(null);
-
-  // Leyenda lateral
   const [expandedOrg, setExpandedOrg] = useState(null);
 
-  // TableCard
   const [searchTerm, setSearchTerm] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const [rowsPerPage, setRowsPerPage] = useState(10);
 
-  // Histórico
   const [timeRange, setTimeRange] = useState('semanal');
   const [historyData, setHistoryData] = useState({ labels: [], datasets: [] });
 
@@ -278,7 +356,6 @@ const PoolView = () => {
     return rawPools.filter((p) => String(p.commercialGroup) === String(selectedOrg));
   }, [rawPools, selectedOrg]);
 
-  // Enriquecer pools con status_label usando la configuración unificada
   const poolsWithLabels = useMemo(() => {
     return filteredByOrg.map((r) => {
       const p = Number(r.usage_percent) || 0;
@@ -289,34 +366,24 @@ const PoolView = () => {
 
   const filteredByControls = useMemo(() => {
     let data = poolsWithLabels;
-    
-    // 1. Filtrar por Drilldown de gráfica
     if (drillOrganization) {
       data = data.filter((p) => String(p.commercialGroup) === String(drillOrganization));
     }
-
-    // 2. Filtrar por Búsqueda de Texto (Tabla)
     if (searchTerm) {
-        const lowerTerm = searchTerm.toLowerCase();
-        data = data.filter(p => 
-            String(p.pool_id || '').toLowerCase().includes(lowerTerm) ||
-            String(p.commercialGroup || '').toLowerCase().includes(lowerTerm) ||
-            String(p.status_label || '').toLowerCase().includes(lowerTerm)
-        );
+      const lowerTerm = searchTerm.toLowerCase();
+      data = data.filter(
+        (p) =>
+          String(p.pool_id || '').toLowerCase().includes(lowerTerm) ||
+          String(p.commercialGroup || '').toLowerCase().includes(lowerTerm) ||
+          String(p.status_label || '').toLowerCase().includes(lowerTerm)
+      );
     }
-
     return data;
   }, [poolsWithLabels, drillOrganization, searchTerm]);
 
-  // Resetear página al cambiar filtros
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [selectedOrg, drillOrganization, rowsPerPage, searchTerm]);
-
-  // --- LÓGICA DE PAGINACIÓN PARA LA TABLA ---
   const totalItems = filteredByControls.length;
   const totalPages = Math.max(1, Math.ceil(totalItems / rowsPerPage));
-  
+
   const paginatedData = useMemo(() => {
     const startIndex = (currentPage - 1) * rowsPerPage;
     return filteredByControls.slice(startIndex, startIndex + rowsPerPage);
@@ -336,46 +403,35 @@ const PoolView = () => {
 
   const chartData = useMemo(() => {
     return poolsWithLabels
-      .map((item) => ({
-        pool_id: item.pool_id,
-        name: String(item.commercialGroup ?? 'N/A'),
-        commercialGroup: item.commercialGroup || 'N/A',
-        Consumo: Number(((Number(item.bytes_consumed) || 0) / 1024 ** 3).toFixed(2)),
-        Limite: Number(((Number(item.bytes_limit) || 0) / 1024 ** 3).toFixed(2)),
-        percent: Number(item.usage_percent) || 0,
-      }))
-      .sort((a, b) => b.Consumo - a.Consumo)
+      .map((item) => {
+        const consumed = Number(item.bytes_consumed) || 0;
+        const limitBytes = Number(item.bytes_limit) || 0;
+        const percent = limitBytes > 0
+          ? Math.min((consumed / limitBytes) * 100, 100)
+          : Number(item.usage_percent) || 0;
+        return {
+          pool_id: item.pool_id,
+          name: String(item.commercialGroup ?? 'N/A'),
+          commercialGroup: item.commercialGroup || 'N/A',
+          Consumo: Number((consumed / 1024 ** 3).toFixed(2)),
+          Limite: Number((limitBytes / 1024 ** 3).toFixed(2)),
+          percent,
+        };
+      })
+      .sort((a, b) => {
+        const pDiff = b.percent - a.percent;
+        if (Math.abs(pDiff) > 0.001) return pDiff;
+        return b.Consumo - a.Consumo;
+      })
       .slice(0, chartLimit);
   }, [poolsWithLabels, chartLimit]);
-
-  const tooltipContent = ({ active, payload }) => {
-    if (!active || !payload?.length) return null;
-    const row = payload[0]?.payload;
-    if (!row) return null;
-    return (
-      <div className="bg-white border border-gray-200 rounded shadow px-3 py-2 text-xs z-50">
-        <div className="font-bold text-blue-700 mb-1">{row.commercialGroup}</div>
-        <div className="text-gray-500">Pool: <span className="font-mono">{row.pool_id}</span></div>
-        <div className="mt-1 space-y-0.5">
-          {payload.map((p, i) => (
-            <div key={i} className="flex justify-between gap-4">
-              <span className="text-gray-600">{p.name}</span>
-              <span className="font-bold text-gray-800">{p.value} GB</span>
-            </div>
-          ))}
-          <div className="pt-1 border-t mt-1 text-gray-400 text-[10px]">
-            Uso: {row.percent.toFixed(2)}%
-          </div>
-        </div>
-      </div>
-    );
-  };
 
   const handleBarClick = (payload) => {
     const org = payload?.commercialGroup;
     if (!org) return;
     setDrillOrganization((prev) => (String(prev) === String(org) ? null : org));
-    setExpandedOrg((prev) => (String(prev) === String(org) ? prev : org)); 
+    setExpandedOrg((prev) => (String(prev) === String(org) ? prev : org));
+    setCurrentPage(1);
   };
 
   const hasActiveFilter = Boolean(drillOrganization);
@@ -393,11 +449,11 @@ const PoolView = () => {
       const pid = sim.pool_id != null ? String(sim.pool_id) : null;
       if (!pid) return;
       const orgName = poolIdToOrg.get(pid) || sim.organization || sim.commercialGroup || 'N/A';
-
       if (!simsByOrg.has(orgName)) simsByOrg.set(orgName, []);
       simsByOrg.get(orgName).push({
         _key: sim._key,
         icc: sim.icc,
+        final_client: sim.final_client,
         label: sim.name || sim.sim_name || sim.icc || 'SIM',
         cons_month_mb: sim.cons_month_mb,
         rate_plan: sim.rate_plan,
@@ -412,30 +468,24 @@ const PoolView = () => {
 
     return [...simsByOrg.entries()]
       .filter(([orgName]) => allowOrg(orgName))
-      .map(([orgName, sims]) => ({
-        commercialGroup: orgName,
-        simsCount: sims.length,
-        sims: sims, 
-      }))
+      .map(([orgName, sims]) => ({ commercialGroup: orgName, simsCount: sims.length, sims }))
       .sort((a, b) => b.simsCount - a.simsCount);
   }, [rawPools, m2mWithPoolId, selectedOrg, drillOrganization]);
 
-  // Histórico (mock)
   useEffect(() => {
     if (loading) return;
-    // Usamos filteredByControls para que la gráfica de tendencia reaccione a los filtros
-    const currentTotalGB = filteredByControls.reduce((acc, item) => acc + (Number(item.bytes_consumed) || 0), 0) / 1024 ** 3;
+    const currentTotalGB =
+      filteredByControls.reduce((acc, item) => acc + (Number(item.bytes_consumed) || 0), 0) / 1024 ** 3;
 
     let labels = [];
     let dataPoints = [];
 
-    // Mock data lógico basado en el total actual
     if (timeRange === 'mensual') {
       labels = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun'];
-      dataPoints = labels.map((_, i) => Number((currentTotalGB * (0.5 + (Math.random() * 0.5))).toFixed(2)));
+      dataPoints = labels.map(() => Number((currentTotalGB * (0.5 + Math.random() * 0.5)).toFixed(2)));
     } else {
       labels = ['Semana 1', 'Semana 2', 'Semana 3', 'Semana 4'];
-      dataPoints = labels.map((_, i) => Number((currentTotalGB * (0.8 + (Math.random() * 0.2))).toFixed(2)));
+      dataPoints = labels.map(() => Number((currentTotalGB * (0.8 + Math.random() * 0.2)).toFixed(2)));
     }
 
     setHistoryData({
@@ -455,7 +505,7 @@ const PoolView = () => {
         },
       ],
     });
-  }, [filteredByControls, timeRange, loading]); // Dependencia correcta
+  }, [filteredByControls, timeRange, loading]);
 
   const lineOptions = {
     responsive: true,
@@ -496,24 +546,19 @@ const PoolView = () => {
                 setSelectedOrg(e.target.value);
                 setDrillOrganization(null);
                 setExpandedOrg(null);
+                setCurrentPage(1);
               }}
               className="block w-full md:w-64 pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-md border"
             >
               <option value="ALL">Todas las Organizaciones</option>
               {uniqueOrgs.map((org) => (
-                <option key={org} value={org}>
-                  {org}
-                </option>
+                <option key={org} value={org}>{org}</option>
               ))}
             </select>
           </div>
-
           {hasActiveFilter && (
             <button
-              onClick={() => {
-                setDrillOrganization(null);
-                setExpandedOrg(null);
-              }}
+              onClick={() => { setDrillOrganization(null); setExpandedOrg(null); setCurrentPage(1); }}
               className="px-3 py-2 text-xs font-bold bg-red-100 text-red-700 border border-red-200 rounded hover:bg-red-200 transition-colors"
             >
               Limpiar filtro
@@ -542,7 +587,9 @@ const PoolView = () => {
         <div className="bg-white p-6 rounded-lg shadow-sm border-l-4 border-orange-500">
           <p className="text-sm text-gray-500 font-medium">Límite Contratado</p>
           <p className="text-2xl font-bold text-gray-800">{formatBytes(stats.limit)}</p>
-          <p className="text-xs text-orange-600 mt-1">Espacio libre: {formatBytes(Math.max(0, stats.limit - stats.consumed))}</p>
+          <p className="text-xs text-orange-600 mt-1">
+            Espacio libre: {formatBytes(Math.max(0, stats.limit - stats.consumed))}
+          </p>
         </div>
       </div>
 
@@ -557,37 +604,21 @@ const PoolView = () => {
             render: () => (
               <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 w-full">
                 {/* CHART */}
-                <div className="lg:col-span-9 bg-white p-6 rounded-lg shadow-md h-[600px]">
-                  <div className="flex justify-between items-start mb-4">
+                <div className="lg:col-span-9 bg-white p-6 rounded-lg shadow-md h-[620px] min-h-0 flex flex-col">
+                  <div className="flex justify-between items-start mb-3 flex-shrink-0">
                     <div>
-                      <h3 className="text-lg font-bold text-gray-700">
-                        Consumo vs Límite (Top {chartLimit})
+                      <h3 className="text-base font-bold text-gray-800">
+                        Consumo vs Límite
+                        <span className="ml-2 text-xs font-normal text-gray-400">
+                          Top {chartLimit} · ordenado por % de uso
+                        </span>
                       </h3>
-                      <div className="flex flex-wrap items-center gap-3 mt-2 text-[10px] text-gray-500 font-medium">
-                        <div className="flex items-center gap-1">
-                          <span className="w-2.5 h-2.5 rounded-full bg-[#0dbb0e]"></span>
-                          <span>Normal (&lt;50%)</span>
-                        </div>
-                        <div className="flex items-center gap-1">
-                          <span className="w-2.5 h-2.5 rounded-full bg-[#f97316]"></span>
-                          <span>Medio (50-75%)</span>
-                        </div>
-                        <div className="flex items-center gap-1">
-                          <span className="w-2.5 h-2.5 rounded-full bg-[#f72424]"></span>
-                          <span>Alto (75-90%)</span>
-                        </div>
-                        <div className="flex items-center gap-1">
-                          <span className="w-2.5 h-2.5 rounded-full bg-[#ba0c0c]"></span>
-                          <span>Crítico (&gt;90%)</span>
-                        </div>
-                      </div>
-                      <p className="text-xs text-gray-400 mt-1">
-                        Clic en una barra para filtrar por Organización
+                      <p className="text-[11px] text-gray-400 mt-0.5">
+                        Clic en una barra para filtrar por organización
                       </p>
                     </div>
-
                     <div className="flex items-center gap-2">
-                      <span className="text-xs text-gray-500 font-medium">Mostrar:</span>
+                      <span className="text-xs text-gray-500">Mostrar:</span>
                       <select
                         value={chartLimit}
                         onChange={(e) => setChartLimit(Number(e.target.value))}
@@ -601,61 +632,120 @@ const PoolView = () => {
                       </select>
                     </div>
                   </div>
-                  
-                  
-                  <ResponsiveContainer width="100%" height="85%">
-                    <BarChart data={chartData} margin={{ top: 20, right: 30, left: 20, bottom: 80 }}>
-                      <defs>
-                      <linearGradient id="arcoiris" x1="0" y1="0" x2="1" y2="0">
-                        <stop offset="0%" stopColor="#ba0c0c" stopOpacity={1}/>
-                        <stop offset="25%" stopColor="#f72424" stopOpacity={1}/>
-                        <stop offset="50%" stopColor="#f97316" stopOpacity={1}/>
-                        <stop offset="75%" stopColor="#eab308" stopOpacity={1}/>
-                        <stop offset="100%" stopColor="#0dbb0e" stopOpacity={1}/>
-                      </linearGradient>
-                    </defs>
-                      <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                      <XAxis dataKey="name" tick={{ fontSize: 11 }} interval={0} angle={-20} textAnchor="end" height={80} />
-                      <YAxis />
-                      <Tooltip content={tooltipContent} />
-                      <Legend verticalAlign="top" height={36} />
 
-                      <Bar dataKey="Consumo" name="Consumo (GB)" fill="url(#arcoiris)" radius={[4, 4, 0, 0]} onClick={handleBarClick}>
-                        {chartData.map((entry, index) => {
-                          const isSelected = drillOrganization && String(drillOrganization) === String(entry.commercialGroup);
-                          // Usar helper para color
-                          const base = getBarColor(entry.percent);
-                          return (
-                            <Cell
-                              key={`c-${index}`}
-                              cursor="pointer"
-                              fill={base}
-                              opacity={isSelected ? 1 : hasActiveFilter ? 0.35 : 1}
-                            />
-                          );
-                        })}
-                      </Bar>
+                  {/* Leyenda de estados */}
+                  <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 mb-3 flex-shrink-0">
+                    {STATUS_LEGEND.map(({ color, label, range }) => (
+                      <div key={label} className="flex items-center gap-1.5">
+                        <span className="w-2.5 h-2.5 rounded-sm flex-shrink-0" style={{ backgroundColor: color }} />
+                        <span className="text-[10px] text-gray-500 font-medium">
+                          {label} <span className="text-gray-400">({range})</span>
+                        </span>
+                      </div>
+                    ))}
+                    <div className="flex items-center gap-1.5 pl-3 border-l border-gray-200">
+                      <span className="w-2.5 h-2.5 rounded-sm flex-shrink-0 bg-[#3e4143]" />
+                      <span className="text-[10px] text-gray-500 font-medium">Límite contratado</span>
+                    </div>
+                  </div>
 
-                      <Bar dataKey="Limite" name="Límite (GB)" fill="#3e4143" radius={[4, 4, 0, 0]} onClick={handleBarClick}>
-                        {chartData.map((entry, index) => {
-                          const isSelected = drillOrganization && String(drillOrganization) === String(entry.commercialGroup);
-                          return (
-                            <Cell
-                              key={`l-${index}`}
-                              cursor="pointer"
-                              fill="#3e4143"
-                              opacity={isSelected ? 1 : hasActiveFilter ? 0.35 : 1}
-                            />
-                          );
-                        })}
-                      </Bar>
-                    </BarChart>
-                  </ResponsiveContainer>
+                  {/* Gráfica */}
+                  <div className="flex-1 min-h-0">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart
+                        data={chartData}
+                        margin={{ top: 16, right: 16, left: 8, bottom: 72 }}
+                        barCategoryGap="28%"
+                        barGap={3}
+                      >
+                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" />
+                        <XAxis
+                          dataKey="name"
+                          tick={{ fontSize: 10, fill: '#6b7280' }}
+                          interval={0}
+                          angle={-15}
+                          textAnchor="end"
+                          height={68}
+                          tickLine={false}
+                          axisLine={{ stroke: '#e5e7eb' }}
+                        />
+                        <YAxis
+                          tick={{ fontSize: 10, fill: '#6b7280' }}
+                          tickLine={false}
+                          axisLine={false}
+                          tickFormatter={(v) => `${v} GB`}
+                          width={58}
+                        />
+                        <Tooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(59,130,246,0.05)' }} />
+
+                        {/* BARRA CONSUMO */}
+                        <Bar
+                          dataKey="Consumo"
+                          name="Consumo (GB)"
+                          radius={[4, 4, 0, 0]}
+                          maxBarSize={44}
+                          onClick={handleBarClick}
+                          shape={(props) => {
+                            const { x, y, width, height, index } = props;
+                            if (index == null || !chartData[index] || width <= 0 || height <= 0) return null;
+                            const entry = chartData[index];
+                            const isSelected = drillOrganization && String(drillOrganization) === String(entry.commercialGroup);
+                            const fill = getBarColor(entry.percent);
+                            const opacity = isSelected ? 1 : hasActiveFilter ? 0.3 : 1;
+                            return (
+                              <g>
+                                <rect
+                                  x={x} y={y} width={width} height={height}
+                                  fill={fill} opacity={opacity} rx={4} ry={4}
+                                  cursor="pointer"
+                                />
+                                <text
+                                  x={x + width / 2} y={y - 4}
+                                  textAnchor="middle"
+                                  fill={fill} fontSize={9} fontWeight="bold"
+                                  opacity={opacity}
+                                >
+                                  {entry.percent.toFixed(0)}%
+                                </text>
+                              </g>
+                            );
+                          }}
+                        />
+
+                        {/* BARRA LÍMITE */}
+                        <Bar
+                          dataKey="Limite"
+                          name="Límite (GB)"
+                          radius={[4, 4, 0, 0]}
+                          maxBarSize={44}
+                          onClick={handleBarClick}
+                          shape={(props) => {
+                            const { x, y, width, height, index } = props;
+                            if (index == null || !chartData[index] || width <= 0 || height <= 0) return null;
+                            const entry = chartData[index];
+                            const isSelected = drillOrganization && String(drillOrganization) === String(entry.commercialGroup);
+                            const opacity = isSelected ? 1 : hasActiveFilter ? 0.3 : 1;
+                            return (
+                              <rect
+                                x={x} y={y} width={width} height={height}
+                                fill="#3e4143" opacity={opacity} rx={4} ry={4}
+                                cursor="pointer"
+                              />
+                            );
+                          }}
+                        />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
                 </div>
 
                 {/* LEGEND / SIMS */}
-                <div className="lg:col-span-3 ">
-                  <OrgLegend orgRows={orgLegendRows} expandedOrg={expandedOrg} setExpandedOrg={setExpandedOrg} />
+                <div className="lg:col-span-3">
+                  <OrgLegend
+                    orgRows={orgLegendRows}
+                    expandedOrg={expandedOrg}
+                    setExpandedOrg={setExpandedOrg}
+                  />
                 </div>
               </div>
             ),
@@ -663,7 +753,7 @@ const PoolView = () => {
           {
             id: 'Tendencia',
             title: 'Tendencia de Consumo',
-            defaultMode: 'show',
+            defaultMode: 'hide',
             render: () => (
               <div className="bg-white p-6 rounded shadow border border-gray-200 w-full flex flex-col h-[400px]">
                 <div className="flex justify-between items-center mb-4 border-b pb-2">
@@ -673,17 +763,13 @@ const PoolView = () => {
                   <div className="flex bg-gray-100 rounded p-1">
                     <button
                       onClick={() => setTimeRange('semanal')}
-                      className={`px-3 py-1 text-xs font-medium rounded transition-colors ${
-                        timeRange === 'semanal' ? 'bg-white shadow text-blue-600' : 'text-gray-500 hover:text-gray-700'
-                      }`}
+                      className={`px-3 py-1 text-xs font-medium rounded transition-colors ${timeRange === 'semanal' ? 'bg-white shadow text-blue-600' : 'text-gray-500 hover:text-gray-700'}`}
                     >
                       Semanal
                     </button>
                     <button
                       onClick={() => setTimeRange('mensual')}
-                      className={`px-3 py-1 text-xs font-medium rounded transition-colors ${
-                        timeRange === 'mensual' ? 'bg-white shadow text-blue-600' : 'text-gray-500 hover:text-gray-700'
-                      }`}
+                      className={`px-3 py-1 text-xs font-medium rounded transition-colors ${timeRange === 'mensual' ? 'bg-white shadow text-blue-600' : 'text-gray-500 hover:text-gray-700'}`}
                     >
                       Mensual
                     </button>
@@ -701,10 +787,33 @@ const PoolView = () => {
       {/* TABLA */}
       <TableCard
         title="Pools"
-        data={filteredByControls} 
+        data={filteredByControls}
         columns={[
-          { header: 'Pool ID', accessor: 'pool_id', render: (r) => <span className="font-mono font-bold text-blue-700 text-xs">{r.pool_id}</span> },
-          { header: 'Organización', accessor: 'commercialGroup', render: (r) => <span className="text-gray-600 font-medium">{r.commercialGroup}</span> },
+          {
+            header: 'Organización',
+            accessor: 'organization',
+           render: (r) => {
+                         const color = getOrgColor(r.organization);
+                         const hasCorp = color !== '#94a3b8';
+                         return (
+                           <span
+                             className="px-2 py-1 rounded text-xs font-bold uppercase tracking-wide whitespace-nowrap"
+                             style={{
+                               backgroundColor: `${color}18`,
+                               color,
+                               border: `1px solid ${color}40`,
+                             }}
+                           >
+                             {r.organization || 'SIN ASIGNAR'}
+                           </span>
+                         );
+                       },
+          },
+          {
+            header: 'Nombre',
+            accessor: 'commercialGroup',
+            render: (r) => <span className="text-gray-600 font-medium">{r.commercialGroup}</span>,
+          },
           {
             header: 'SIMs Activas',
             accessor: 'sims_active',
@@ -720,42 +829,33 @@ const PoolView = () => {
             header: 'Consumo',
             accessor: 'bytes_consumed',
             render: (r) => {
-                const percent = r.usage_percent || 0;
-                // Obtenemos el color consistente con la gráfica
-                const colorHex = getBarColor(percent); 
-                return (
-                    <div className="w-32">
-                        <div className="flex justify-between text-[10px] mb-1 text-gray-500">
-                            <span>{formatBytes(r.bytes_consumed)}</span>
-                            <span>{formatBytes(r.bytes_limit)}</span>
-                        </div>
-                        <div className="w-full h-1.5 bg-gray-100 rounded-full overflow-hidden">
-                            <div
-                                className="h-full rounded-full transition-all duration-500"
-                                style={{ 
-                                    width: `${Math.min(percent, 100)}%`,
-                                    backgroundColor: colorHex 
-                                }}
-                            />
-                        </div>
-                    </div>
-                );
+              const percent = r.usage_percent || 0;
+              const colorHex = getBarColor(percent);
+              return (
+                <div className="w-32">
+                  <div className="flex justify-between text-[10px] mb-1 text-gray-500">
+                    <span>{formatBytes(r.bytes_consumed)}</span>
+                    <span>{formatBytes(r.bytes_limit)}</span>
+                  </div>
+                  <div className="w-full h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                    <div
+                      className="h-full rounded-full transition-all duration-500"
+                      style={{ width: `${Math.min(percent, 100)}%`, backgroundColor: colorHex }}
+                    />
+                  </div>
+                </div>
+              );
             },
           },
           {
             header: 'Estado',
-            accessor: 'status_label',
+            accessor: 'usage_percent',
             render: (r) => {
-              const p = r.usage_percent || 0;
-              const label = r.status_label || 'Normal';
-              let color = 'bg-green-100 text-green-800';
-              if (label === 'Crítico') color = 'bg-red-100 text-red-800';
-              else if (label === 'Alto') color = 'bg-orange-100 text-orange-800';
-              else if (label === 'Medio') color = 'bg-yellow-100 text-yellow-800';
-              
+              const p = Number(r.usage_percent) || 0;
+              const { label, tailwind } = getStatusConfig(p);
               return (
-                <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${color}`}>
-                  {label} ({p.toFixed(1)}%)
+                <span className={`px-2 py-0.5 rounded-sm text-[10px] font-bold uppercase ${tailwind}`}>
+                  ({p.toFixed(1)}% {label})
                 </span>
               );
             },
@@ -764,11 +864,11 @@ const PoolView = () => {
         loading={loading}
         enableToolbar
         searchTerm={searchTerm}
-        setSearchTerm={setSearchTerm}
+        setSearchTerm={(val) => { setSearchTerm(val); setCurrentPage(1); }}
         searchPlaceholder="Buscar Pool ID, Grupo o Estado..."
         searchableKeys={['pool_id', 'commercialGroup', 'status_label']}
         pageSize={rowsPerPage}
-        setPageSize={setRowsPerPage}
+        setPageSize={(val) => { setRowsPerPage(val); setCurrentPage(1); }}
         rowsPerPageOptions={[5, 10, 20]}
         currentPage={currentPage}
         setCurrentPage={setCurrentPage}

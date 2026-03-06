@@ -10,6 +10,7 @@ import {
   FileCode,
   Bell,
   Info,
+  Power,
   Library
 } from 'lucide-react';
 
@@ -21,6 +22,7 @@ import InfoView from './views/InfoView';
 import PoolView from './views/PoolView';
 import RenView from './views/RenView';
 import AlarmsView from './views/AlarmsView';
+import InstView from './views/InstView';
 
 // ==========================================
 // COMPONENTE PRINCIPAL APP
@@ -49,6 +51,7 @@ const App = () => {
       case 'versions': return <InfoView />;
       case 'alarms': return <AlarmsView />;
       case 'ren': return <RenView />;
+      case 'inst': return <InstView />
       default: return <M2MView />;
     }
   };
@@ -77,6 +80,13 @@ const App = () => {
       items: [
         { label: 'Versiones', id: 'versions', icon: <Info size={16} /> },
       ]
+    },
+    {
+      title: 'INSTALACIONES',
+      icon: <Power size={18} />,
+      items: [
+        { label: 'Instalaciones', id: 'inst', icon: <Power size={16} /> },
+      ] 
     },
     {
       title: 'ALARMAS',

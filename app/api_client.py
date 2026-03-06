@@ -64,8 +64,8 @@ class CoreClient:
     def get_devicesKiwi(self):
         return self._get_data(Settings.URL_DEVICES2, "resources/kiwi.xlsx")
 
-    def get_deviceInfo(self):
-        return self._get_data(Settings.URL_INFO, "resources/info.xlsx")
+    #def get_deviceInfo(self):
+    #    return self._get_data(Settings.URL_INFO, "resources/info.xlsx")
         
     def get_deviceModels(self):
         return self._get_data(Settings.URL_MODEL_B, "resources/models.xlsx")

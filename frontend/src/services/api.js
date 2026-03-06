@@ -23,7 +23,23 @@ export const api = {
   getKiwi: (page, limit) => fetchEndpoint('kiwi', page, limit),
   getInfo: (page, limit) => fetchEndpoint('info', page, limit),
   getM2M: (page, limit) => fetchEndpoint('m2m', page, limit),
-  getRenewals: (page, limit) => fetchEndpoint('renewals', page, limit),
+  getRenewals: async (page, limit) => {
+    try {
+      // Disparamos ambas peticiones en paralelo para que cargue el doble de rápido
+      const [m2mResponse, planResponse] = await Promise.all([
+        fetchEndpoint('renewals/m2m', page, limit),
+        fetchEndpoint('renewals/plan', page, limit)
+      ]);
+
+      const m2mArray = m2mResponse?.all_data || m2mResponse?.data || [];
+      const planArray = planResponse?.all_data || planResponse?.data || [];
+      return [...m2mArray, ...planArray];
+    } catch (error) {
+      console.error("Error al obtener las renovaciones combinadas:", error);
+      // Retornamos un array vacío en caso de error para que la UI no crashee
+      return []; 
+    }
+  },
   getPool: (page, limit) => fetchEndpoint('pools', page, limit),
   getInst: (page, limit) => fetchEndpoint('installations', page, limit),
   getAlarmStats: async () => {

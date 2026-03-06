@@ -230,7 +230,7 @@ const OrgLegend = ({ orgRows, expandedOrg, setExpandedOrg }) => {
                           const keyOpen = expandedKey === s._key;
                           return (
                             <li
-                              key={s.final_client}
+                              key={s._key}
                               className="flex flex-col text-xs rounded-md px-2 py-1.5 bg-white border border-gray-50 hover:border-blue-100 transition-colors"
                               style={{ boxShadow: '0 1px 2px 0 rgba(0,0,0,0.03)' }}
                             >
@@ -241,7 +241,7 @@ const OrgLegend = ({ orgRows, expandedOrg, setExpandedOrg }) => {
                                   className="truncate text-left text-blue-600 hover:text-blue-800 hover:underline font-medium"
                                   title="Ver ICC"
                                 >
-                                  {s.final_client || '-'}
+                                  {s.final_client || s.icc || 'SIM'}
                                 </button>
                                 <div className="flex flex-col text-right flex-shrink-0">
                                   <span className={`${s.colorClass} tabular-nums`}>{s.val.toFixed(2)} MB</span>

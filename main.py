@@ -370,6 +370,29 @@ def get_alarm_history(limit: int = 50):
         print(f"❌ Error en Alarm History: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+# ==========================================
+# ENDPOINT 7: installations
+# ==========================================
+@app.get("/internal/dashboard/installations")
+def get_installations_dashboard(
+    limit: int = Query(5000, ge=1),
+    offset: int = Query(0, ge=0)
+):
+    raw_installations = client.get_installations()
+    try:
+        df_final = process_installations(raw_installations)
+        
+        # Paginación
+        df_final = paginate_df(df_final, limit, offset)
+        
+        return df_final.to_dict(orient="records")
+    except Exception as e:
+        print(f"❌ Error en Installations: {e}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)

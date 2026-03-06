@@ -25,6 +25,7 @@ export const api = {
   getM2M: (page, limit) => fetchEndpoint('m2m', page, limit),
   getRenewals: (page, limit) => fetchEndpoint('renewals', page, limit),
   getPool: (page, limit) => fetchEndpoint('pools', page, limit),
+  getInst: (page, limit) => fetchEndpoint('installations', page, limit),
   getAlarmStats: async () => {
     try {
       const response = await axios.get(`${API_BASE}/alarms/stats`);

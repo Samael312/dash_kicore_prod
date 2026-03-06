@@ -5,16 +5,25 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel 
 import pandas as pd
 
+
 # 1. Imports de tu proyecto
 from app.api_client import CoreClient
+from app.database import DatabaseAdapter
+from app.logic.data_info import process_devicesInfo 
 from app.logic.data_device import prepare_boards, prepare_kiwi
-from app.logic.data_info import process_devicesInfo
 from app.logic.data_m2m import process_m2m
 from app.logic.data_pool import process_pools
 from app.logic.data_renewal import process_m2m_renewals_logic, process_plan_renewals_logic  
 from app.logic.data_inst import process_installations
 # Instancia global del cliente
+
 client = CoreClient()
+db = DatabaseAdapter()
+
+class HistoryRequest(BaseModel):
+    start_date: str # Debería ser formato YYYY-MM-DD
+    end_date: str   # Debería ser formato YYYY-MM-DD
+    monthly: bool
 
 # 2. DEFINICIÓN DEL LIFESPAN
 @asynccontextmanager
@@ -140,22 +149,22 @@ def get_kiwi_dashboard(
 # ENDPOINT 2: INFO
 # ==========================================
 @app.get("/internal/dashboard/info")
-def get_info_dashboard(
+def get_all_device_info(
     limit: int = Query(5000, ge=1),
     offset: int = Query(0, ge=0)
 ):
-    raw_info = client.get_deviceInfo()
     try:
-        df_final = process_devicesInfo(raw_info)
-        df_final = clean_df(df_final)
-        
-        df_final = paginate_df(df_final, limit, offset)
-        
-        return df_final.to_dict(orient="records")
+        raw_info = db.get_all_device_info()
+        try:
+            df_final = process_devicesInfo(raw_info)
+            df_final = clean_df(df_final)
+            df_final = paginate_df(df_final, limit, offset)
+            return df_final.to_dict(orient="records")
+        except ValueError as ve:
+            print(f"❌ Error lógico en Device Info: {ve}")
+            raise HTTPException(status_code=400, detail=str(ve))
     except Exception as e:
-        print(f"❌ Error en Info: {e}")
-        import traceback
-        traceback.print_exc()
+        print(f"❌ Error en Device Info: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 # ==========================================
@@ -229,7 +238,7 @@ def get_pools_dashboard(
         raise HTTPException(status_code=500, detail=str(e))
 
 # ==========================================
-# ENDPOINT 5: RENEWALS
+# ENDPOINT 5: RENEWALS M2M Y PLAN
 # ==========================================
 @app.get("/internal/dashboard/renewals/m2m")
 def get_m2m_renewals_dashboard(
@@ -311,6 +320,9 @@ def get_plan_renewals_dashboard(
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+# ==========================================
+# ENDPOINT 6: installations
+# ==========================================
 @app.get("/internal/dashboard/installations")
 def get_installations_dashboard(
     limit: int = Query(5000, ge=1),
@@ -329,6 +341,7 @@ def get_installations_dashboard(
         import traceback
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
+
 
 if __name__ == "__main__":
     import uvicorn

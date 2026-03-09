@@ -64,8 +64,8 @@ class CoreClient:
     def get_devicesKiwi(self):
         return self._get_data(Settings.URL_DEVICES2, "resources/kiwi.xlsx")
 
-    def get_deviceInfo(self):
-        return self._get_data(Settings.URL_INFO, "resources/info.xlsx")
+    def get_installations(self):
+        return self._get_data(Settings.URL_INSTAL, "resources/installations.xlsx")
         
     def get_deviceModels(self):
         return self._get_data(Settings.URL_MODEL_B, "resources/models.xlsx")
@@ -77,24 +77,39 @@ class CoreClient:
         url = Settings.URL_HISTORY.format(icc=icc)
         return self._post(url, json_payload=payload)
     
-    def get_deviceRenewals(self, show_all=True, from_date=None, to=None):
-        # 1. Configurar params
+
+    def get_m2m_renewals(self, show_all=True, from_date=None, to=None):
         params = {}
         if show_all:
             params['showAll'] = 'true'
-            # Usamos fechas por defecto amplias si es show_all
             params['from'] = '2020-01-01'
             params['to'] = '2035-01-01'
         else:
-            # Si vienen fechas específicas, las usamos
             if from_date: params['from'] = from_date
             if to: params['to'] = to
             
         return self._get_data(
-            Settings.URL_REN,           
-            "resources/renewals.xlsx",  
+            Settings.URL_M2M_REN,           
+            "resources/m2m_renewals.xlsx",  
             params=params               
         )
+    
+    def get_plan_renewals(self, show_all=True, from_date=None, to=None):
+        params = {}
+        if show_all:
+            params['showAll'] = 'true'
+            params['from'] = '2020-01-01'
+            params['to'] = '2035-01-01'
+        else:
+            if from_date: params['from'] = from_date
+            if to: params['to'] = to
+            
+        return self._get_data(
+            Settings.URL_PLAN_REN,           
+            "resources/plan_renewals.xlsx",  
+            params=params               
+        )
+
 
     # --- VERIFICACION Y OBTENCIÓN DE DATOS MEJORADA ---
     def _get_data(self, url, filename="resources/output.xlsx", params=None):

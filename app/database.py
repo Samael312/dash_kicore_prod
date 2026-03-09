@@ -67,3 +67,18 @@ class DatabaseAdapter:
         finally:
             if 'cursor' in locals(): cursor.close()
             if 'conn' in locals(): conn.close()
+
+    def get_all_device_info(self):
+        query = "SELECT * FROM devices_info"
+        try:
+            conn = self.get_connection()
+            cursor = conn.cursor(dictionary=True)
+            cursor.execute(query)
+            result = cursor.fetchall()
+            return result
+        except mysql.connector.Error as err:
+            print(f"❌ Error al consultar devices_info: {err}")
+            return []
+        finally:
+            if 'cursor' in locals(): cursor.close()
+            if 'conn' in locals(): conn.close()

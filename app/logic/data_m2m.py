@@ -116,6 +116,8 @@ def process_m2m(json_data):
     # 4. ORGANIZACIÓN (Custom Field 1)
     df['organization'] = df.get('customField1', pd.Series(["N/A"]*len(df))).fillna("N/A").astype(str)
 
+    df['final_client'] = df.get('alias', pd.Series(["N/A"]*len(df))).fillna("N/A").astype(str)
+
     # 5. ICCID (Identificador único SIM)
     df['icc'] = df.get('icc', pd.Series(["N/A"]*len(df))).fillna("N/A").astype(str)
 
@@ -159,7 +161,8 @@ def process_m2m(json_data):
     # LIMPIEZA FINAL
     # ================================
     cols_to_keep = [
-        'icc', 
+        'icc',
+        'final_client', 
         'status_clean', 
         'rate_plan', 
         'network_type', 

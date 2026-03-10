@@ -242,9 +242,9 @@ def get_pools_dashboard(
 def get_m2m_renewals_dashboard(
     limit: int = Query(5000, ge=1),
     offset: int = Query(0, ge=0),
-    show_all: bool = Query(True),
-    from_date: str = Query(None),
-    to: str = Query(None),
+    show_all: bool = Query(False),
+    from_date: str = Query("1970-01-01"),
+    to: str = Query("2100-12-31"),
     raw: bool = Query(False),
 ):
     try:

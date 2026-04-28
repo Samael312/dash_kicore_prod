@@ -85,44 +85,41 @@ def extract_first_connection(json_obj):
 
 
 def process_installations(raw_data):
-    """
-    Limpia y estructura los datos de Instalaciones.
-    'state', 'enabled', 'last_change' y 'first_connection'
-    se extraen del campo 'status'. Los timestamps epoch se convierten a ISO 8601 UTC.
-    """
     if not raw_data:
-        return pd.DataFrame()
+        return []
 
     df = pd.DataFrame(raw_data)
+    now_ts = datetime.now(timezone.utc).timestamp()
+    cuatro_anos_seg = 1 * 365.25 * 24 * 3600
 
-    col_status = df.get('status')
-
-    if col_status is not None:
-        status_parsed          = col_status.apply(safe_json)
-        df['state']            = status_parsed.apply(extract_link)
-        df['enabled']          = status_parsed.apply(extract_enabled)
-        df['last_change']      = status_parsed.apply(extract_last_change)
-        df['first_connection'] = status_parsed.apply(extract_first_connection)
+    if 'status' in df.columns:
+        status_parsed = df['status'].apply(safe_json)
         
+        # Extraemos datos necesarios
+        df['state'] = status_parsed.apply(lambda x: x.get('link', {}).get('detected') if isinstance(x, dict) else None)
+        df['enabled'] = status_parsed.apply(lambda x: x.get('enabled') if isinstance(x, dict) else None)
+        
+        # Guardamos el timestamp crudo para el cálculo
+        raw_last_change = status_parsed.apply(lambda x: _safe_float(x.get('link', {}).get('last_change')) if isinstance(x, dict) else None)
+        
+        # Generamos los campos para el frontend
+        df['last_change'] = raw_last_change.apply(_epoch_to_iso)
+        df['first_connection'] = status_parsed.apply(lambda x: _epoch_to_iso(x.get('link', {}).get('first_connection')) if isinstance(x, dict) else None)
+        
+        # --- NUEVA LÓGICA BOOLEANA ---
+        df['obsoletas'] = raw_last_change.apply(
+            lambda ts: True if (ts is not None and (now_ts - ts) >= cuatro_anos_seg) else False
+        )
     else:
-        df['state']            = None
-        df['enabled']          = None
-        df['last_change']      = None
-        df['first_connection'] = None
+        # Defaults en caso de error de datos
+        df['state'] = df['enabled'] = False
+        df['last_change'] = df['first_connection'] = None
+        df['obsoletas'] = False
 
-    final_cols = [
-        'uuid',
-        'name',
-        'description',
-        'state',
-        'enabled',
-        'last_change',
-        'first_connection',
-    ]
+    # Forzamos booleanos en state y enabled para evitar nulls en el front
+    df['state'] = df['state'].apply(lambda x: True if x is True else False)
+    df['enabled'] = df['enabled'].apply(lambda x: True if x is True else False)
 
-    df_out = df[[col for col in final_cols if col in df.columns]].copy()
-
-    # Garantía final: reemplazar cualquier NaN/Inf residual con None
-    df_out = df_out.astype(object).where(pd.notnull(df_out), None)
-
-    return df_out
+    final_cols = ['uuid', 'name', 'description', 'state', 'enabled', 'last_change', 'first_connection', 'obsoletas']
+    df_out = df[final_cols].replace({math.nan: None})
+    return df_out  # Devolvemos el DataFrame puro para que el front lo convierta a JSON con to_dict(orient='records')

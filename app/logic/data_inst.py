@@ -84,13 +84,15 @@ def extract_first_connection(json_obj):
         return None
 
 
-def process_installations(raw_data):
+def process_installations(raw_data, years_to_obsolete=4):
     if not raw_data:
         return []
 
     df = pd.DataFrame(raw_data)
     now_ts = datetime.now(timezone.utc).timestamp()
-    cuatro_anos_seg = 1 * 365.25 * 24 * 3600
+    
+    # El umbral ahora se calcula dinámicamente basado en el argumento
+    threshold_seg = years_to_obsolete * 365.25 * 24 * 3600
 
     if 'status' in df.columns:
         status_parsed = df['status'].apply(safe_json)
@@ -106,9 +108,9 @@ def process_installations(raw_data):
         df['last_change'] = raw_last_change.apply(_epoch_to_iso)
         df['first_connection'] = status_parsed.apply(lambda x: _epoch_to_iso(x.get('link', {}).get('first_connection')) if isinstance(x, dict) else None)
         
-        # --- NUEVA LÓGICA BOOLEANA ---
+        # --- LÓGICA BOOLEANA CON EL UMBRAL DINÁMICO ---
         df['obsoletas'] = raw_last_change.apply(
-            lambda ts: True if (ts is not None and (now_ts - ts) >= cuatro_anos_seg) else False
+            lambda ts: True if (ts is not None and (now_ts - ts) >= threshold_seg) else False
         )
     else:
         # Defaults en caso de error de datos

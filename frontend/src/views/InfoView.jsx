@@ -1,3 +1,4 @@
+// InfoView.jsx
 import React, { useEffect, useMemo, useState, useRef } from 'react';
 import { api } from '../services/api';
 import TableCard from '../components/TableCard';
@@ -31,10 +32,10 @@ const KPI_STYLES = {
 const KpiBox = ({ title, value, color = 'blue', sub }) => {
   const { border, text } = KPI_STYLES[color] || KPI_STYLES.blue;
   return (
-    <div className={`bg-white p-6 rounded shadow border-l-4 ${border} flex flex-col items-center w-full`}>
+    <div className={`bg-white p-6 rounded shadow border-l-4 ${border} flex flex-col items-center w-full text-center`}>
       <span className="text-gray-500 text-sm uppercase font-bold tracking-wider mb-2">{title}</span>
       <span className={`text-3xl font-bold ${text}`}>{value}</span>
-      {sub && <span className="text-xs text-gray-400 mt-1">{sub}</span>}
+      {sub && <div className="text-xs text-gray-400 mt-2">{sub}</div>}
     </div>
   );
 };
@@ -51,23 +52,39 @@ const formatDate = (isoStr) => {
   } catch { return '—'; }
 };
 
-// Definición de todas las columnas disponibles con su id y estado por defecto
+// Función para extraer solo la versión base (sin el hash)
+const getBaseVersion = (v) => {
+  if (!v || v === 'N/A') return 'N/A';
+  const match = v.match(/^(v\d{6}\.\d+(?:\.\d+)?)/);
+  if (match) return match[1];
+  return v.split('-')[0];
+};
+
+const getVersionScore = (v) => {
+  if (!v) return 0;
+  const match = v.match(/^v(\d{4})(\d{2})\.(\d+(?:\.\d+)?)/);
+  if (!match) return 0;
+  const year = parseInt(match[1], 10);
+  const month = parseInt(match[2], 10);
+  const ver = parseFloat(match[3]);
+  return year * 100000 + month * 1000 + ver;
+};
+
 const ALL_COLUMNS = [
   { id: 'uuid',            label: 'UUID',           defaultVisible: true  },
-  { id: 'quiiotd_version', label: 'Versión',         defaultVisible: true  },
-  { id: 'compilation_date',label: 'Compilación',     defaultVisible: true  },
-  { id: 'update_status',   label: 'Estado',          defaultVisible: true  },
-  { id: 'board_model',     label: 'Placa',           defaultVisible: true  },
-  { id: 'osname',          label: 'SO',              defaultVisible: false },
-  { id: 'uptime',          label: 'Uptime',          defaultVisible: false },
-  { id: 'sys_temp_c',      label: 'Temp / RAM',      defaultVisible: true  },
-  { id: 'free_size_mb',    label: 'Disco libre',     defaultVisible: false },
-  { id: 'interfaces',      label: 'Interfaces',      defaultVisible: false },
-  { id: 'info_timestamp',  label: 'Última info',     defaultVisible: true  },
-  { id: 'update_ts',       label: 'Actualizado en',  defaultVisible: false },
+  { id: 'quiiotd_version', label: 'Versión',        defaultVisible: true  },
+  { id: 'compilation_date',label: 'Compilación',    defaultVisible: true  },
+  { id: 'update_status',   label: 'Estado',         defaultVisible: true  },
+  { id: 'board_model',     label: 'Placa',          defaultVisible: true  },
+  { id: 'osname',          label: 'SO',             defaultVisible: false },
+  { id: 'uptime',          label: 'Uptime',         defaultVisible: false },
+  { id: 'sys_temp_c',      label: 'Temp / RAM',     defaultVisible: true  },
+  { id: 'free_size_mb',    label: 'Disco libre',    defaultVisible: false },
+  { id: 'interfaces',      label: 'Interfaces',     defaultVisible: false },
+  { id: 'info_timestamp',  label: 'Última info',    defaultVisible: true  },
+  { id: 'update_ts',       label: 'Actualizado en', defaultVisible: false },
 ];
 
-// Dropdown selector de columnas
 const ColumnToggle = ({ visibleCols, onToggle, onReset }) => {
   const [open, setOpen] = useState(false);
   const ref = useRef(null);
@@ -84,8 +101,7 @@ const ColumnToggle = ({ visibleCols, onToggle, onReset }) => {
         onClick={() => setOpen((o) => !o)}
         className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-gray-600 bg-white border border-gray-300 rounded-md hover:bg-gray-50 transition-colors"
       >
-        <Columns size={15} />
-        Columnas
+        <Columns size={15} /> Columnas
         <span className="ml-1 bg-blue-100 text-blue-700 text-xs font-bold px-1.5 py-0.5 rounded-full">
           {visibleCols.size}
         </span>
@@ -121,7 +137,7 @@ const ColumnToggle = ({ visibleCols, onToggle, onReset }) => {
 };
 
 const InfoView = () => {
-  const [data,    setData]    = useState([]);
+  const [data, setData] = useState([]);
   const [loading, setLoading] = useState(false);
 
   const [searchTerm,       setSearchTerm]       = useState('');
@@ -132,20 +148,16 @@ const InfoView = () => {
   const [drilldownModel,   setDrilldownModel]   = useState(null);
   const [currentPage,      setCurrentPage]      = useState(1);
   const [rowsPerPage,      setRowsPerPage]      = useState(10);
+  const [referenceVersion, setReferenceVersion] = useState('');
 
-  // Columnas visibles: Set de ids
   const defaultVisible = new Set(ALL_COLUMNS.filter((c) => c.defaultVisible).map((c) => c.id));
   const [visibleCols, setVisibleCols] = useState(defaultVisible);
 
   const toggleCol = (id) => {
     setVisibleCols((prev) => {
       const next = new Set(prev);
-      if (next.has(id)) {
-        if (next.size === 1) return prev; // siempre al menos 1 columna
-        next.delete(id);
-      } else {
-        next.add(id);
-      }
+      if (next.has(id)) { if (next.size === 1) return prev; next.delete(id); } 
+      else { next.add(id); }
       return next;
     });
   };
@@ -167,25 +179,58 @@ const InfoView = () => {
     fetchData();
   }, []);
 
-  const processedData = useMemo(() => {
-    return (Array.isArray(data) ? data : []).map((d) => ({
-      ...d,
-      uuid:             d.device             || d.uuid             || '—',
-      quiiotd_version:  d.quiiotd_version                          || 'N/A',
-      compilation_date: d.compilation_date                         || null,
-      update_status:    d.update_status                            || 'Sin Datos',
-      board_model:      d.board_model                              || 'Desconocido',
-      osname:           d.osname                                   || '—',
-      osversion:        d.osversion                                || '—',
-      uptime:           d.uptime                                   || '—',
-      free_ram_mb:      d.free_ram_mb   != null ? d.free_ram_mb   : null,
-      sys_temp_c:       d.sys_temp_c    != null ? d.sys_temp_c    : null,
-      free_size_mb:     d.free_size_mb  != null ? d.free_size_mb  : null,
-      info_timestamp:   d.info_timestamp                           || null,
-      interfaces:       d.interfaces                               || '—',
-      update_ts:        d.update_ts                                || null,
-    }));
+  // 1. Versiones BASE (Sin Hash) para el selector de Meta (Objetivo)
+  const sortedBaseVersions = useMemo(() => {
+    if (!data || data.length === 0) return [];
+    const versions = [...new Set(data.map(d => getBaseVersion(d.quiiotd_version)).filter(v => v !== 'N/A'))];
+    return versions.sort((a, b) => getVersionScore(b) - getVersionScore(a));
   }, [data]);
+
+  // 1.5 Versiones COMPLETAS (Con Hash) para el filtro secundario
+  const sortedFullVersions = useMemo(() => {
+    if (!data || data.length === 0) return [];
+    const versions = [...new Set(data.map(d => d.quiiotd_version).filter(v => v && v !== 'N/A'))];
+    return versions.sort((a, b) => getVersionScore(b) - getVersionScore(a));
+  }, [data]);
+
+  // 2. Autoseleccionar la versión más alta (BASE) al cargar
+  useEffect(() => {
+    if (sortedBaseVersions.length > 0 && !referenceVersion) {
+      setReferenceVersion(sortedBaseVersions[0]); 
+    }
+  }, [sortedBaseVersions, referenceVersion]);
+
+  // 3. Procesar datos (Mantiene la versión completa original, solo usa la base para el estado)
+  const processedData = useMemo(() => {
+    return (Array.isArray(data) ? data : []).map((d) => {
+      const fullVersionStr = d.quiiotd_version || 'N/A';
+      const baseVersionStr = getBaseVersion(fullVersionStr);
+      
+      let calcStatus = 'Sin Datos';
+      if (fullVersionStr !== 'N/A') {
+        // La validación se hace contra la versión limpia
+        calcStatus = (baseVersionStr === referenceVersion) ? 'Actualizado' : 'Desactualizado';
+      }
+
+      return {
+        ...d,
+        uuid:             d.device             || d.uuid             || '—',
+        quiiotd_version:  fullVersionStr, // Mantenemos la versión con HASH para toda la tabla y gráficas
+        compilation_date: d.compilation_date   || null,
+        update_status:    calcStatus,
+        board_model:      d.board_model        || 'Desconocido',
+        osname:           d.osname             || '—',
+        osversion:        d.osversion          || '—',
+        uptime:           d.uptime             || '—',
+        free_ram_mb:      d.free_ram_mb  != null ? d.free_ram_mb  : null,
+        sys_temp_c:       d.sys_temp_c   != null ? d.sys_temp_c   : null,
+        free_size_mb:     d.free_size_mb != null ? d.free_size_mb : null,
+        info_timestamp:   d.info_timestamp     || null,
+        interfaces:       d.interfaces         || '—',
+        update_ts:        d.update_ts          || null,
+      };
+    });
+  }, [data, referenceVersion]);
 
   const filteredData = useMemo(() => {
     let result = processedData;
@@ -199,7 +244,7 @@ const InfoView = () => {
       result = result.filter((d) =>
         ['uuid', 'quiiotd_version', 'update_status', 'board_model',
          'osname', 'osversion', 'uptime', 'interfaces'].some((k) =>
-          String(d[k] || '').toLowerCase().includes(t)
+         String(d[k] || '').toLowerCase().includes(t)
         )
       );
     }
@@ -209,6 +254,7 @@ const InfoView = () => {
   const totalItems = filteredData.length;
   const totalPages = Math.max(1, Math.ceil(totalItems / rowsPerPage));
 
+  // Las estadísticas seguirán usando las versiones completas
   const versionStats = useMemo(() => {
     const stats = {};
     filteredData.forEach((d) => {
@@ -253,9 +299,7 @@ const InfoView = () => {
     return Math.round(valid.reduce((s, d) => s + d.free_ram_mb, 0) / valid.length) + ' MB';
   }, [filteredData]);
 
-  const uniqueVersions = useMemo(() => [...new Set(processedData.map((d) => d.quiiotd_version))].sort(), [processedData]);
-  const uniqueModels   = useMemo(() => [...new Set(processedData.map((d) => d.board_model))].filter(Boolean).sort(), [processedData]);
-
+  const uniqueModels = useMemo(() => [...new Set(processedData.map((d) => d.board_model))].filter(Boolean).sort(), [processedData]);
   const STATUS_COLORS = { Actualizado: '#10b981', Desactualizado: '#ef4444', 'Sin Datos': '#9ca3af' };
 
   const hasActiveFilter = Boolean(
@@ -269,7 +313,6 @@ const InfoView = () => {
     setCurrentPage(1);
   };
 
-  // Todas las columnas definidas — se filtran según visibleCols
   const allColumnDefs = [
     {
       id: 'uuid', header: 'UUID', accessor: 'uuid',
@@ -360,7 +403,6 @@ const InfoView = () => {
     },
   ];
 
-  // Filtrar según visibilidad, respetando el orden de ALL_COLUMNS
   const activeColumns = ALL_COLUMNS
     .filter((c) => visibleCols.has(c.id))
     .map((c) => allColumnDefs.find((def) => def.id === c.id))
@@ -391,20 +433,40 @@ const InfoView = () => {
             </button>
           )}
         </div>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">🔧 Versión</label>
+        
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          {/* Dropdown para definir la versión objetivo (Usa las versiones base sin hash) */}
+          <div className="p-3 bg-green-50 rounded-lg border border-green-200">
+            <label className="block text-xs font-bold text-green-800 uppercase tracking-wide mb-1">
+              Versión Objetivo (Actualizados)
+            </label>
+            <select
+              className="block w-full rounded-md border-green-300 shadow-sm focus:border-green-500 focus:ring-green-500 p-2 text-sm bg-white font-medium text-green-900"
+              value={referenceVersion}
+              onChange={(e) => {
+                setReferenceVersion(e.target.value);
+                setCurrentPage(1);
+              }}
+            >
+              {sortedBaseVersions.map((v) => <option key={v} value={v}>{v}</option>)}
+            </select>
+          </div>
+
+          {/* Filtrar por Versión Completa (Usa las versiones con hash) */}
+          <div className="pt-3">
+            <label className="block text-sm font-medium text-gray-700 mb-1">🔧 Filtrar por Versión</label>
             <select
               className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 p-2.5 border bg-gray-50"
               value={selectedVersion}
               onChange={(e) => { setSelectedVersion(e.target.value); setDrilldownVersion(null); setCurrentPage(1); }}
             >
               <option value="Todas">Todas</option>
-              {uniqueVersions.map((v) => <option key={v} value={v}>{v}</option>)}
+              {sortedFullVersions.map((v) => <option key={v} value={v}>{v}</option>)}
             </select>
           </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">🖥️ Modelo de placa</label>
+
+          <div className="pt-3">
+            <label className="block text-sm font-medium text-gray-700 mb-1">🖥️ Filtrar por Modelo</label>
             <select
               className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 p-2.5 border bg-gray-50"
               value={selectedModel}
@@ -419,8 +481,20 @@ const InfoView = () => {
 
       {/* 2. KPIs */}
       <div className="grid grid-cols-2 md:grid-cols-5 gap-4 w-full">
-        <KpiBox title="Total"           value={totalItems}       color="blue"   />
-        <KpiBox title="Actualizados"    value={`${updatedPct}%`} color="green"  sub={`${updatedCount} dispositivos`} />
+        <KpiBox title="Total" value={totalItems} color="blue" />
+        <KpiBox 
+          title="Actualizados" 
+          value={`${updatedPct}%`} 
+          color="green"  
+          sub={
+            <>
+              <span className="bg-green-100 text-green-800 px-2 py-0.5 rounded font-mono border border-green-200">
+                Ref: {referenceVersion || 'Calculando...'}
+              </span>
+              <div className="mt-1">{updatedCount} dispositivos</div>
+            </>
+          } 
+        />
         <KpiBox title="Versión común"   value={modeVersion}      color="gray"   />
         <KpiBox title="Temp. media"     value={avgTemp}          color="orange" />
         <KpiBox title="RAM libre media" value={avgRam}           color="indigo" />
@@ -498,7 +572,6 @@ const InfoView = () => {
 
       {/* 4. TABLA con selector de columnas */}
       <div className="bg-white rounded shadow border border-gray-200 overflow-hidden">
-        {/* Toolbar columnas */}
         <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 bg-gray-50">
           <span className="text-sm font-semibold text-gray-700">Listado de dispositivos</span>
           <ColumnToggle visibleCols={visibleCols} onToggle={toggleCol} onReset={resetCols} />

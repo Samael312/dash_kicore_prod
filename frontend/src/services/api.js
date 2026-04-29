@@ -1,6 +1,9 @@
 import axios from 'axios';
 
-const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:8000/internal/dashboard';
+//const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:8000/internal/dashboard';
+
+const API_BASE = import.meta.env.VITE_API_BASE || 'http://metrics.kiconex.com/internal/dashboard';
+
 
 // --- MODIFICADO: Añadido extraParams = {} para soportar filtros dinámicos ---
 const fetchEndpoint = async (endpoint, page, limit, extraParams = {}) => {

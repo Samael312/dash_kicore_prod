@@ -1,5 +1,5 @@
 import mysql.connector
-from app.config.settings import Settings
+from config.settings import Settings
 
 class DatabaseAdapter:
     def __init__(self):

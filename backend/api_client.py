@@ -3,7 +3,7 @@ import requests
 import pandas as pd
 import json
 import os
-from app.config.settings import Settings
+from config.settings import Settings
 
 class CoreClient:
     def __init__(self, token=None):

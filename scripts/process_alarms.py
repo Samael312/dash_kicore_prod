@@ -6,8 +6,8 @@ import json
 # Añadir la raíz del proyecto al path para poder importar desde 'app'
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-from app.cloud_client import CloudClient
-from app.database import DatabaseAdapter
+from backend.cloud_client import CloudClient
+from backend.database import DatabaseAdapter
 
 # Mapeo de constantes de Kiconex
 TYPE_LINK = 1

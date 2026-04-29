@@ -23,6 +23,9 @@ env/
 *.xlsx#
 .ipynb_checkpoints/
 
+.tar
+*.tar
+
 frontend/.vite
 
 scripts/alarms_cron.log

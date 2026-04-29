@@ -1,4 +1,4 @@
-# Archivo: main.py
+ # Archivo: main.py
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException, Query, Body
 from fastapi.middleware.cors import CORSMiddleware
@@ -9,14 +9,14 @@ import math
 
 
 # 1. Imports de tu proyecto
-from app.api_client import CoreClient
-from app.database import DatabaseAdapter
-from app.logic.data_info import process_devicesInfo 
-from app.logic.data_device import prepare_boards, prepare_kiwi
-from app.logic.data_m2m import process_m2m
-from app.logic.data_pool import process_pools
-from app.logic.data_renewal import process_m2m_renewals_logic, process_plan_renewals_logic  
-from app.logic.data_inst import process_installations
+from api_client import CoreClient
+from database import DatabaseAdapter
+from logic.data_info import process_devicesInfo 
+from logic.data_device import prepare_boards, prepare_kiwi
+from logic.data_m2m import process_m2m
+from logic.data_pool import process_pools
+from logic.data_renewal import process_m2m_renewals_logic, process_plan_renewals_logic  
+from logic.data_inst import process_installations
 # Instancia global del cliente
 
 client = CoreClient()

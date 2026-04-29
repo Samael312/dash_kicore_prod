@@ -1,5 +1,5 @@
 import requests
-from app.config.settings import Settings
+from config.settings import Settings
 
 class CloudClient:
     def __init__(self, token=None):

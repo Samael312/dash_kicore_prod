@@ -16,7 +16,7 @@ class Settings:
     CLOUD_BASE_URL = "https://cloud.kiconex.com/api/v1"
     
     # Database Configuration
-    DB_HOST = os.getenv("DB_HOST", "localhost")
+    DB_HOST = os.getenv("DB_HOST_SYSTEM") or os.getenv("DB_HOST", "localhost")
     DB_NAME = os.getenv("DB_NAME", "metrics")
     DB_USER = os.getenv("DB_USER")
     DB_PASS = os.getenv("DB_PASS")

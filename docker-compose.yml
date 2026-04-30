@@ -3,15 +3,15 @@ version: '3.8'
 services:
   backend:
     build:
-      context: .
-      dockerfile: Dockerfile.backend
+      context: ./backend
+      dockerfile: Dockerfile
     container_name: dashboard-backend
     ports:
       - "8000:8000"
     env_file:
-      - .env
+      - ./backend/.env
     volumes:
-      - .:/app
+      - ./backend:/app
     # Para que el contenedor pueda ver la DB en el host (Linux)
     extra_hosts:
       - "host.docker.internal:host-gateway"

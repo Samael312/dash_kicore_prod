@@ -40,7 +40,7 @@ const AlarmsView = () => {
       try {
         const [stats, history] = await Promise.all([
           api.getAlarmStats(),
-          api.getAlarmHistory(24) // Últimas 24 muestras
+          api.getAlarmHistory(144) // Últimas 144 muestras
         ]);
         
         if (stats) setRealStats(stats);

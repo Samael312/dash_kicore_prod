@@ -61,6 +61,7 @@ const VpnView = () => {
         const vpnMap = new Map(vpnItems.map(v => [v.username, v]));
         const cloudMap = new Map(cloudItems.map(c => [c.uuid, c]));
 
+        
         // Obtenemos todos los identificadores únicos (Full Outer Join)
         const allIds = new Set([...cloudMap.keys(), ...vpnMap.keys()]);
 
@@ -71,6 +72,8 @@ const VpnView = () => {
           // Normalizamos estados booleanos
           const isCloudUp = cloud ? (cloud.state === true || cloud.state === 'Conectado') : false;
           const isVpnUp = vpn ? (vpn.link_detected === true || vpn.link_detected === 'true') : false;
+          const isRouter = id.startsWith('RUT') || id.startsWith('router') || id.startsWith('rut'); // Ejemplo de cómo identificar routers por UUID
+
 
           // Lógica de Sincronización
           let syncStatus = 'Desconocido';
@@ -81,13 +84,16 @@ const VpnView = () => {
             else if (!isCloudUp && isVpnUp) syncStatus = 'Solo VPN (Desfasado)';
           } else if (cloud && !vpn) {
             syncStatus = 'Sin registro VPN';
-          } else if (!cloud && vpn) {
+          }else if (!cloud && vpn && isRouter) {
+            syncStatus = 'Router Asignado';
+          } else if (!cloud && vpn && !isRouter) {
             syncStatus = 'Huérfano VPN'; // Está en la VPN pero no en Cloud
-          }
+          } 
 
           return {
             id,
             name: cloud?.name || '—',
+            router: isRouter,
             cloud_state: isCloudUp,
             vpn_state: isVpnUp,
             cloud_last_change: cloud?.last_change || null,
@@ -117,7 +123,7 @@ const VpnView = () => {
     } else if (selectedSync === 'Desfasados') {
       data = data.filter(d => d.sync_status === 'Solo Cloud (Desfasado)' || d.sync_status === 'Solo VPN (Desfasado)');
     } else if (selectedSync === 'Estructurales') {
-      data = data.filter(d => d.sync_status === 'Sin registro VPN' || d.sync_status === 'Huérfano VPN');
+      data = data.filter(d => d.sync_status === 'Sin registro VPN' || d.sync_status === 'Huérfano VPN' || d.sync_status === 'Router Asignado');
     }
     
     // Filtro del gráfico (específico)
@@ -135,7 +141,7 @@ const VpnView = () => {
     return {
       sincronizados: filteredData.filter(d => d.sync_status.includes('Ambos')).length,
       desfasados: filteredData.filter(d => d.sync_status.includes('Desfasado')).length,
-      estructurales: filteredData.filter(d => d.sync_status === 'Sin registro VPN' || d.sync_status === 'Huérfano VPN').length,
+      estructurales: filteredData.filter(d => d.sync_status === 'Sin registro VPN' || d.sync_status === 'Huérfano VPN' || d.sync_status === 'Router Asignado').length,
     };
   }, [filteredData]);
 
@@ -155,6 +161,7 @@ const VpnView = () => {
       case 'Solo Cloud (Desfasado)': return '#F59E0B'; // amber
       case 'Solo VPN (Desfasado)': return '#EF4444'; // red
       case 'Sin registro VPN': return '#94A3B8'; // light slate
+      case 'Router Asignado': return '#3B82F6'; // blue
       case 'Huérfano VPN': return '#8B5CF6'; // purple
       default: return '#E2E8F0';
     }
@@ -185,7 +192,7 @@ const VpnView = () => {
               <option value="Todos">Ver Todos</option>
               <option value="Sincronizados">Sincronizados (OK)</option>
               <option value="Desfasados">Desfasados (Alertas)</option>
-              <option value="Estructurales">Problemas de Registro</option>
+              <option value="Estructurales">Estructurales</option>
             </select>
           </div>
 

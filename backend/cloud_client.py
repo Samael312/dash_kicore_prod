@@ -1,4 +1,3 @@
-from turtle import pd
 import os
 import pandas as pd
 import requests

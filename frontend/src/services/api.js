@@ -1,8 +1,8 @@
 import axios from 'axios';
 
-//const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:8000/internal/dashboard';
+const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:8000/internal/dashboard';
 
-const API_BASE = import.meta.env.VITE_API_BASE || 'http://metrics.kiconex.com/internal/dashboard';
+//const API_BASE = import.meta.env.VITE_API_BASE || 'http://metrics.kiconex.com/internal/dashboard';
 
 
 // --- MODIFICADO: Añadido extraParams = {} para soportar filtros dinámicos ---
@@ -25,6 +25,8 @@ export const api = {
   getKiwi: (page, limit) => fetchEndpoint('kiwi', page, limit),
   getInfo: (page, limit) => fetchEndpoint('info', page, limit),
   getM2M: (page, limit) => fetchEndpoint('m2m', page, limit),
+  getCloudDevice: (page, limit) => fetchEndpoint('devices_cloud', page, limit),
+  getCloudVPN: (page, limit) => fetchEndpoint('vpn_status', page, limit),
   getRenewals: async (page, limit) => {
     try {
       const resolvedLimit  = limit ?? 5000;

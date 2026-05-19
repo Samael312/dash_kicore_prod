@@ -122,6 +122,6 @@ def process_installations(raw_data, years_to_obsolete=4):
     df['state'] = df['state'].apply(lambda x: True if x is True else False)
     df['enabled'] = df['enabled'].apply(lambda x: True if x is True else False)
 
-    final_cols = ['uuid', 'name', 'description', 'state', 'enabled', 'last_change', 'first_connection', 'obsoletas']
+    final_cols = ['uuid', 'name', 'description', 'state', 'enabled', 'last_change', 'first_connection', 'obsoletas', "_type"]
     df_out = df[final_cols].replace({math.nan: None})
     return df_out  # Devolvemos el DataFrame puro para que el front lo convierta a JSON con to_dict(orient='records')

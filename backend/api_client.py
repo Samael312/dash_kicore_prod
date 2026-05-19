@@ -77,6 +77,9 @@ class CoreClient:
         url = Settings.URL_HISTORY.format(icc=icc)
         return self._post(url, json_payload=payload)
     
+    def get_vpn_status(self):
+        return self._get_data(Settings.URL_VPN_STATUS, "resources/vpn_status.xlsx")
+    
 
     def get_m2m_renewals(self, show_all=True, from_date=None, to=None):
         params = {}

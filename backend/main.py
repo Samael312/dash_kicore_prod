@@ -10,6 +10,8 @@ import math
 
 # 1. Imports de tu proyecto
 from api_client import CoreClient
+from logic.data_vpn import process_vpn_status
+from cloud_client import CloudClient
 from database import DatabaseAdapter
 from logic.data_info import process_devicesInfo 
 from logic.data_device import prepare_boards, prepare_kiwi
@@ -20,6 +22,7 @@ from logic.data_inst import process_installations
 # Instancia global del cliente
 
 client = CoreClient()
+cloud_client = CloudClient()
 db = DatabaseAdapter()
 
 class HistoryRequest(BaseModel):
@@ -31,6 +34,7 @@ class HistoryRequest(BaseModel):
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     print(" 🚀 Iniciando Analytics Service (Modo API Token)...")
+    print(' Entra usando "http://localhost:8000/docs#" para ver la documentación interactiva.') # <-- Así
     yield
     print(" 🛑 Apagando servicio...")
 
@@ -371,7 +375,40 @@ def get_alarm_history(limit: int = 50):
         print(f"❌ Error en Alarm History: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+@app.get("/internal/dashboard/devices_cloud")
+def get_device_cloud(
+    limit: int = Query(5000, ge=1),
+    offset: int = Query(0, ge=0),):
 
+    device_cloud = cloud_client.get_device_cloud()
+    try:
+        
+        df_final = process_installations(device_cloud)
+        
+        # Paginación
+        df_final = paginate_df(df_final, limit, offset)
+        
+        return df_final.to_dict(orient="records")
+    except Exception as e:
+        print(f"❌ Error en VPN Status: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/internal/dashboard/vpn_status")
+def get_vpn_status(
+    limit: int = Query(5000, ge=1),
+    offset: int = Query(0, ge=0)):
+    
+    vpn = client.get_vpn_status()
+    try:
+        df_final = process_vpn_status(vpn)
+    
+            # Paginación
+        df_final = paginate_df(df_final, limit, offset)
+            
+        return df_final.to_dict(orient="records")
+    except Exception as e:
+        print(f"❌ Error en VPN Status: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 if __name__ == "__main__":
     import uvicorn

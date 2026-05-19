@@ -36,3 +36,7 @@ class Settings:
     URL_INFO = f"{BASE_URL}/boards/info"
     URL_M2M = f"{BASE_URL}/m2m"
     URL_HISTORY = f"{BASE_URL}/m2m/{{icc}}/consumes"
+
+    # Cloud API Endpoints
+    URL_INFO_DEVICE_CLOUD = f"{CLOUD_BASE_URL}/devices"
+    URL_VPN_STATUS= f"{BASE_URL}/vpn?status=true"

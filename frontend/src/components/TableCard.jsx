@@ -171,8 +171,23 @@ const TableCard = ({
   const [showDateRange, setShowDateRange]         = useState(false);
   const [dateRangeAnchor, setDateRangeAnchor]     = useState(null);
   const [dateRange, setDateRange]                 = useState({ from: '', to: '' });
+  
+  // Nuevo estado local para controlar lo que el usuario escribe en el input de paginación
+  const [pageInput, setPageInput]                 = useState(String(currentPage || 1));
 
   const dateRangeActive = enableDateRange && Boolean(dateRange.from || dateRange.to);
+
+  const paginationEnabled =
+    typeof currentPage === 'number' && typeof totalItems === 'number' &&
+    typeof pageSize    === 'number' && typeof totalPages === 'number' &&
+    typeof setCurrentPage === 'function';
+
+  // Sincroniza el input local si la página cambia desde los botones externos (flechas)
+  useEffect(() => {
+    if (paginationEnabled) {
+      setPageInput(String(currentPage));
+    }
+  }, [currentPage, paginationEnabled]);
 
   const requestSort = (key) => {
     const d = sortConfig.key === key && sortConfig.direction === 'ascending' ? 'descending' : 'ascending';
@@ -236,11 +251,6 @@ const TableCard = ({
     return result;
   }, [data, filters, sortConfig, searchTerm, effectiveSearchKeys, dateRange, dateRangeKey, enableDateRange]);
 
-  const paginationEnabled =
-    typeof currentPage === 'number' && typeof totalItems === 'number' &&
-    typeof pageSize    === 'number' && typeof totalPages === 'number' &&
-    typeof setCurrentPage === 'function';
-
   const pageRows = useMemo(() => {
     if (!paginationEnabled) return processedData;
     const s = (currentPage - 1) * pageSize;
@@ -253,6 +263,28 @@ const TableCard = ({
   useEffect(() => {
     if (paginationEnabled) setCurrentPage(1);
   }, [searchTerm, pageSize, filters, dateRange, setCurrentPage, paginationEnabled]);
+
+  // Procesa y valida el cambio manual de página al confirmar (Blur o Enter)
+  const handlePageSubmit = () => {
+    const maxPage = Math.max(1, totalPages);
+    let targetPage = parseInt(pageInput, 10);
+
+    if (isNaN(targetPage) || targetPage < 1) {
+      targetPage = 1;
+    } else if (targetPage > maxPage) {
+      targetPage = maxPage;
+    }
+
+    setCurrentPage(targetPage);
+    setPageInput(String(targetPage));
+  };
+
+  const handleKeyDown = (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      e.target.blur(); // El blur disparará la ejecución en handlePageSubmit
+    }
+  };
 
   // Exportar CSV con BOM UTF-8
   const exportCSV = () => {
@@ -487,6 +519,7 @@ const TableCard = ({
           <div className="text-sm text-slate-500 font-medium">
             <span className="text-slate-700">{totalItems === 0 ? 0 : indexOfFirstItem + 1}-{Math.min(indexOfLastItem, totalItems)}</span>
             {' '}de <span className="text-slate-700">{totalItems}</span>
+            {totalPages > 0 && <span className="text-slate-400 font-normal"> ({totalPages} {totalPages === 1 ? 'página' : 'páginas'})</span>}
           </div>
           <div className="flex items-center gap-1.5 bg-white p-1 rounded-lg border border-slate-200">
             <button onClick={() => setCurrentPage((p) => Math.max(p - 1, 1))}
@@ -494,9 +527,20 @@ const TableCard = ({
               className="p-1.5 rounded-md text-slate-500 hover:bg-slate-100 hover:text-indigo-600 disabled:opacity-40 transition-colors">
               <ChevronLeft size={18} />
             </button>
-            <div className="px-4 py-1 text-sm font-semibold text-indigo-700 bg-indigo-50 rounded select-none min-w-[2rem] text-center">
-              {currentPage}
-            </div>
+            
+            {/* INPUT DE PÁGINA INTERACTIVO */}
+            <input
+              type="number"
+              min={1}
+              max={Math.max(1, totalPages)}
+              value={pageInput}
+              disabled={totalItems === 0 || loading}
+              onChange={(e) => setPageInput(e.target.value)}
+              onBlur={handlePageSubmit}
+              onKeyDown={handleKeyDown}
+              className="w-12 py-1 text-sm font-semibold text-indigo-700 bg-indigo-50/70 rounded text-center focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:bg-indigo-50 border border-transparent focus:border-transparent transition-all [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+            />
+            
             <button onClick={() => setCurrentPage((p) => Math.min(p + 1, totalPages))}
               disabled={currentPage === totalPages || totalItems === 0 || loading}
               className="p-1.5 rounded-md text-slate-500 hover:bg-slate-100 hover:text-indigo-600 disabled:opacity-40 transition-colors">

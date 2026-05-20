@@ -68,6 +68,7 @@ def process_vpn_status(data):
     # Extraemos campos anidados y los limpiamos
     df['link_detected'] = df['status'].apply(extract_detected)
     df['last_change'] = df['status'].apply(extract_last_change)
+    
 
     if 'type' in df.columns:
         
@@ -75,4 +76,4 @@ def process_vpn_status(data):
         
         df = df[df['type'] == 'device']
 
-    return df[['username', 'type', 'link_detected', 'last_change']].replace({math.nan: None})
+    return df[['username', 'type', 'link_detected', 'last_change', 'framedipaddress']].replace({math.nan: None})

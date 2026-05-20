@@ -71,33 +71,39 @@ const VpnView = () => {
 
           // Normalizamos estados booleanos
           const isCloudUp = cloud ? (cloud.state === true || cloud.state === 'Conectado') : false;
+          const enabledState = cloud?.enabled;
+          const isEnabled = enabledState === true || enabledState === 'Habilitado';
+          const isDisabled = !isEnabled;
           const isVpnUp = vpn ? (vpn.link_detected === true || vpn.link_detected === 'true') : false;
           const isRouter = id.startsWith('RUT') || id.startsWith('router') || id.startsWith('rut'); // Ejemplo de cómo identificar routers por UUID
 
 
           // Lógica de Sincronización
           let syncStatus = 'Desconocido';
-          if (cloud && vpn) {
-            if (isCloudUp && isVpnUp) syncStatus = 'Ambos Conectados';
+
+          
+          if (isDisabled) {
+              syncStatus = 'Deshabilitado en Cloud';
+          } else if (cloud && vpn) {
+            if (isCloudUp && isVpnUp)   syncStatus = 'Ambos Conectados';
             else if (!isCloudUp && !isVpnUp) syncStatus = 'Ambos Desconectados';
-            else if (isCloudUp && !isVpnUp) syncStatus = 'Solo Cloud (Desfasado)';
-            else if (!isCloudUp && isVpnUp) syncStatus = 'Solo VPN (Desfasado)';
+            else syncStatus = isCloudUp ? 'Solo Cloud (Desfasado)' : 'Solo VPN (Desfasado)';
           } else if (cloud && !vpn) {
-            syncStatus = 'Sin registro VPN';
-          }else if (!cloud && vpn && isRouter) {
-            syncStatus = 'Router Asignado';
-          } else if (!cloud && vpn && !isRouter) {
-            syncStatus = 'Huérfano VPN'; // Está en la VPN pero no en Cloud
+              syncStatus = 'Sin registro VPN';
+          } else if (!cloud && vpn) {
+              syncStatus = isRouter ? 'Router Asignado' : 'Huérfano VPN';
           } 
 
           return {
             id,
             name: cloud?.name || '—',
             router: isRouter,
+            enabled: isEnabled,
+            disabled: isDisabled,
             cloud_state: isCloudUp,
             vpn_state: isVpnUp,
             cloud_last_change: cloud?.last_change || null,
-            vpn_last_change: vpn?.last_change || null,
+            framedipaddress: vpn?.framedipaddress || null,
             sync_status: syncStatus,
             has_cloud: !!cloud,
             has_vpn: !!vpn
@@ -118,7 +124,9 @@ const VpnView = () => {
     let data = rawData;
     
     // Filtro del select (agrupado)
-    if (selectedSync === 'Sincronizados') {
+    if (selectedSync === 'Desabilitados') {
+      data = data.filter(d => d.sync_status === 'Deshabilitado en Cloud');
+    } else if (selectedSync === 'Sincronizados') {
       data = data.filter(d => d.sync_status === 'Ambos Conectados' || d.sync_status === 'Ambos Desconectados');
     } else if (selectedSync === 'Desfasados') {
       data = data.filter(d => d.sync_status === 'Solo Cloud (Desfasado)' || d.sync_status === 'Solo VPN (Desfasado)');
@@ -163,6 +171,7 @@ const VpnView = () => {
       case 'Sin registro VPN': return '#94A3B8'; // light slate
       case 'Router Asignado': return '#3B82F6'; // blue
       case 'Huérfano VPN': return '#8B5CF6'; // purple
+      case 'Deshabilitado en Cloud': return '#6B7280'; // gray
       default: return '#E2E8F0';
     }
   };
@@ -193,6 +202,7 @@ const VpnView = () => {
               <option value="Sincronizados">Sincronizados (OK)</option>
               <option value="Desfasados">Desfasados (Alertas)</option>
               <option value="Estructurales">Estructurales</option>
+              <option value="Desabilitados">Deshabilitados</option>
             </select>
           </div>
 
@@ -315,7 +325,7 @@ const VpnView = () => {
                 render: (r) => (
                   <div className="flex flex-col gap-1 text-[11px]">
                     {r.has_cloud && <span className="text-blue-600">☁️ Cloud: {formatDate(r.cloud_last_change)}</span>}
-                    {r.has_vpn && <span className="text-purple-600">🔒 VPN: {formatDate(r.vpn_last_change)}</span>}
+                    {r.has_vpn && <span className="text-purple-600">🔒 VPN: {r.framedipaddress}</span>}
                   </div>
                 ),
               },

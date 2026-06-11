@@ -1,7 +1,7 @@
 import os
 import pandas as pd
 import requests
-from config.settings import Settings
+from backend.config.settings import Settings
 
 
 class CloudClient:
@@ -15,7 +15,7 @@ class CloudClient:
         Obtiene las alarmas desde la API de Cloud filtered por estado.
         Por defecto trae activas (1) y no reconocidas/otras (2).
         """
-        url = f"{self.base_url}/devices/alarms"
+        url = Settings.URL_ALARMS
         params = {"state": state}
         
         print(f"📡 [CloudAPI] Solicitando alarmas (state={state})...")

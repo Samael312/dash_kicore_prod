@@ -1,4 +1,4 @@
-// M2MView.jsx (actualizado "con lo nuevo" estilo DevicesView: TableCard filtra/pagina, tú solo aplicas filtros externos)
+// M2MView.jsx
 import React, { useEffect, useMemo, useState } from 'react';
 import { api } from '../services/api';
 import TableCard from '../components/TableCard';
@@ -20,6 +20,11 @@ import {
 } from 'chart.js';
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, ArcElement, Title, Tooltip, Legend);
+
+// OBJETO DE CACHÉ EN MEMORIA (Persiste entre cambios de pestañas)
+const m2mCache = {
+  data: null
+};
 
 const M2MView = () => {
   const [rawData, setRawData] = useState([]);
@@ -44,18 +49,28 @@ const M2MView = () => {
   const [rowsPerPage, setRowsPerPage] = useState(10);
 
   useEffect(() => {
-    const fetch = async () => {
+    const fetchData = async () => {
+      // Si ya existen datos en caché, se cargan instantáneamente sin consultar la API
+      if (m2mCache.data) {
+        setRawData(m2mCache.data);
+        return;
+      }
+
       setLoading(true);
       try {
         const res = await api.getM2M(1, 5000);
-        setRawData(Array.isArray(res) ? res : (res?.items || []));
+        const items = Array.isArray(res) ? res : (res?.items || []);
+        
+        // Guardamos en la caché global del archivo
+        m2mCache.data = items;
+        setRawData(items);
       } catch (error) {
         console.error('Error cargando M2M:', error);
       } finally {
         setLoading(false);
       }
     };
-    fetch();
+    fetchData();
   }, []);
 
   const uniqueOrgs = useMemo(
@@ -401,7 +416,6 @@ const M2MView = () => {
           { header: 'Organización', accessor: 'organization',
              render: (r) => {
                                      const color = getOrgColor(r.organization);
-                                     const hasCorp = color !== '#94a3b8';
                                      return (
                                        <span
                                          className="px-2 py-1 rounded text-xs font-bold uppercase tracking-wide whitespace-nowrap"
@@ -435,24 +449,19 @@ const M2MView = () => {
               if (matchGB) {
                 limit = parseInt(matchGB[1]) * 1024;
               } 
-              // B) Detectar MB explícitos (ej: "500MB")
               else {
                 const matchMB = planName.match(/\b(\d+)\s*mb/);
                 if (matchMB) {
                   limit = parseInt(matchMB[1]);
                 } 
-                // C) Detectar número suelto al final o entre espacios (ej: "Plan 500")
-                // \b(\d+)\b significa: un número que tiene espacios o signos de puntuación a los lados
-                // Esto ignora "4G", "3G", etc.
                 else {
-                  const matchNum = planName.match(/\b(\d{2,})\b/); // Buscamos preferiblemente de 2 digitos o mas (para evitar un "1" o "2" suelto que no sea cuota)
+                  const matchNum = planName.match(/\b(\d{2,})\b/); 
                   if (matchNum) {
                     limit = parseInt(matchNum[1]);
                   }
                 }
               }
 
-              // 3. LOGICA DE COLORES
               let colorClass = 'text-gray-600'; 
               let percent = 0;
 

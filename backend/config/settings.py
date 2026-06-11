@@ -40,3 +40,4 @@ class Settings:
     # Cloud API Endpoints
     URL_INFO_DEVICE_CLOUD = f"{CLOUD_BASE_URL}/devices"
     URL_VPN_STATUS= f"{BASE_URL}/vpn?status=true"
+    URL_ALARMS = f"{CLOUD_BASE_URL}/devices/alarms"

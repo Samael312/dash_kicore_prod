@@ -4,7 +4,7 @@ import { api } from '../services/api';
 import TableCard from '../components/TableCard';
 import PieChartCard from '../components/PieChartCard';
 import SelectDash from '../components/SelectDash';
-import { Loader2, AlertTriangle, Check } from 'lucide-react'; // <-- Añadido Check para el botón
+import { Loader2, AlertTriangle, Check } from 'lucide-react';
 
 import {
   Chart as ChartJS,
@@ -15,6 +15,9 @@ import {
 } from 'chart.js';
 
 ChartJS.register(ArcElement, Title, Tooltip, Legend);
+
+// OBJETO DE CACHÉ EN MEMORIA (Persiste mientras no se recargue la pestaña del navegador)
+const installationsCache = {};
 
 const formatDate = (isoStr) => {
   if (!isoStr) return '—';
@@ -56,20 +59,29 @@ const InstallationsView = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const [rowsPerPage, setRowsPerPage] = useState(10);
   
-  // --- NUEVOS ESTADOS ---
-  // inputYears: Lo que el usuario escribe (puede ser string vacío temporalmente)
   const [inputYears, setInputYears] = useState('4');
-  // activeYearsThreshold: El valor que realmente dispara el useEffect
   const [activeYearsThreshold, setActiveYearsThreshold] = useState(4);
 
   useEffect(() => {
     const fetchData = async () => {
+      // Creamos una clave única en la caché basada en los años de umbral
+      const cacheKey = `years-${activeYearsThreshold}`;
+
+      if (installationsCache[cacheKey]) {
+        // Si ya existen datos para este umbral en la caché, los usamos instantáneamente
+        setRawData(installationsCache[cacheKey]);
+        return;
+      }
+
       setLoading(true);
       try {
-        // Usamos activeYearsThreshold, no inputYears
         const res = await api.getInst(1, 5000, activeYearsThreshold);
         const items = Array.isArray(res) ? res : (res?.items || []);
-        setRawData(items.map(mapInstallation));
+        const mappedItems = items.map(mapInstallation);
+        
+        // Guardamos en la caché antes de actualizar el estado
+        installationsCache[cacheKey] = mappedItems;
+        setRawData(mappedItems);
       } catch (e) {
         console.error(e);
       } finally {
@@ -77,15 +89,13 @@ const InstallationsView = () => {
       }
     };
     fetchData();
-  }, [activeYearsThreshold]); // Solo se dispara cuando cambia el umbral activo
+  }, [activeYearsThreshold]); // Solo pedirá a la API si cambia el umbral de años y no está en caché
 
   const handleApplyYears = () => {
     const val = parseFloat(inputYears);
-    // Si el valor es válido y mayor a 0, lo aplicamos
     if (!isNaN(val) && val > 0) {
       setActiveYearsThreshold(val);
     } else {
-      // Si el usuario metió texto inválido o vacío, restauramos al valor activo
       setInputYears(String(activeYearsThreshold));
     }
   };
@@ -167,7 +177,6 @@ const InstallationsView = () => {
               <option value="Todos">Todos</option>
               <option value="Habilitado">Habilitado</option>
               <option value="Deshabilitado">Deshabilitado</option>
-              {/* Usa el valor activo para el texto */}
               <option value="Obsoletas">⚠️ Obsoletas (+{activeYearsThreshold} años)</option>
             </select>
           </div>
@@ -182,14 +191,14 @@ const InstallationsView = () => {
                 step="0.5"
                 className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 p-2.5 border bg-gray-50"
                 value={inputYears}
-                onChange={(e) => setInputYears(e.target.value)} // Solo cambia el estado visual del input
+                onChange={(e) => setInputYears(e.target.value)}
                 onKeyDown={(e) => {
-                  if (e.key === 'Enter') handleApplyYears(); // Permite aplicar dando al enter
+                  if (e.key === 'Enter') handleApplyYears();
                 }}
               />
               <button
                 onClick={handleApplyYears}
-                disabled={loading} // Se deshabilita mientras carga
+                disabled={loading}
                 className="flex items-center gap-1 px-4 py-2 bg-blue-600 text-white rounded shadow hover:bg-blue-700 transition-colors disabled:bg-blue-300"
                 title="Aplicar umbral"
               >
@@ -211,7 +220,7 @@ const InstallationsView = () => {
         </div>
       </div>
 
-      {/* 2. KPIs */}
+      {/* 2. KPIs / CARGA */}
       {loading ? (
         <div className="flex flex-col items-center justify-center py-10 bg-white rounded shadow-sm border border-gray-200">
           <Loader2 className="animate-spin text-blue-500 mb-2" size={48} />
@@ -359,8 +368,12 @@ const InstallationsView = () => {
               },
               {
                 header: 'Primera Conexión',
-                accesor: 'first_connection',
-                render: (r) => <span className="text-xs whitespace-nowrap text-gray-600">{r.first_connection}</span>,
+                accessor: 'first_connection',
+                render: (r) => (
+                  <span className="text-xs whitespace-nowrap text-gray-600">
+                    {formatDate(r.first_connection)}
+                  </span>
+                ),
               },
               {
                 header: 'UUID',

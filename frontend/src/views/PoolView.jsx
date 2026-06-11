@@ -1,3 +1,4 @@
+// PoolView.jsx
 import React, { useEffect, useMemo, useState } from 'react';
 import { api } from '../services/api';
 import { Layers, Activity, Search, Loader2, ChevronRight, Copy } from 'lucide-react';
@@ -30,7 +31,11 @@ import {
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Title, ChartTooltip, ChartLegend, Filler);
 
-// --- UTILIDADES DE COLOR Y ESTADO ---
+// OBJETO DE CACHÉ EN MEMORIA (Persiste ambas respuestas)
+const poolCache = {
+  pools: null,
+  m2m: null
+};
 
 const getStatusConfig = (percent) => {
   if (percent === 0) {
@@ -79,7 +84,6 @@ const processSimData = (s) => {
   return { ...s, val, limit, percent, colorClass: status.tailwind, barColor: status.hex };
 };
 
-// --- TOOLTIP PERSONALIZADO ---
 const CustomTooltip = ({ active, payload }) => {
   if (!active || !payload?.length) return null;
   const row = payload[0]?.payload;
@@ -109,7 +113,6 @@ const CustomTooltip = ({ active, payload }) => {
   );
 };
 
-// --- LEYENDA DE ESTADOS ---
 const STATUS_LEGEND = [
   { color: '#0dbb0e', label: 'Normal',      range: '< 40%' },
   { color: '#f97316', label: 'Medio',       range: '40–64%' },
@@ -118,13 +121,11 @@ const STATUS_LEGEND = [
   { color: '#eab308', label: 'Sin consumo', range: '0%' },
 ];
 
-// --- HELPER: copiar al portapapeles ---
 const copyToClipboard = (e, text) => {
   e.stopPropagation();
   navigator.clipboard.writeText(text);
 };
 
-// --- COMPONENTE ORG LEGEND ---
 const OrgLegend = ({ orgRows, expandedOrg, setExpandedOrg }) => {
   const [filterText, setFilterText] = useState('');
   const [expandedKey, setExpandedKey] = useState(null);
@@ -141,7 +142,6 @@ const OrgLegend = ({ orgRows, expandedOrg, setExpandedOrg }) => {
       className="bg-white border border-gray-100 rounded-xl h-[620px] flex flex-col overflow-hidden"
       style={{ boxShadow: '0 4px 24px 0 rgba(59,130,246,0.07)' }}
     >
-      {/* Cabecera */}
       <div
         className="px-5 py-4 border-b border-gray-100 flex-shrink-0"
         style={{ background: 'linear-gradient(135deg, #f0f6ff 0%, #f8fafc 100%)' }}
@@ -156,7 +156,6 @@ const OrgLegend = ({ orgRows, expandedOrg, setExpandedOrg }) => {
           </span>
         </h4>
 
-        {/* Buscador */}
         <div className="relative mt-3">
           <input
             type="text"
@@ -169,7 +168,6 @@ const OrgLegend = ({ orgRows, expandedOrg, setExpandedOrg }) => {
         </div>
       </div>
 
-      {/* Lista */}
       <div className="overflow-y-auto flex-grow p-2.5 space-y-1">
         {orgRows.length === 0 ? (
           <div className="h-full flex flex-col items-center justify-center gap-3 p-4 text-center">
@@ -196,7 +194,6 @@ const OrgLegend = ({ orgRows, expandedOrg, setExpandedOrg }) => {
                 className="border border-gray-100 rounded-lg bg-white overflow-hidden transition-all hover:border-blue-100"
                 style={{ boxShadow: '0 1px 4px 0 rgba(0,0,0,0.04)' }}
               >
-                {/* Fila org */}
                 <div
                   onClick={() => setExpandedOrg(open ? null : row.commercialGroup)}
                   className={`flex items-center justify-between py-2.5 px-3 cursor-pointer transition-colors ${
@@ -219,7 +216,6 @@ const OrgLegend = ({ orgRows, expandedOrg, setExpandedOrg }) => {
                   </span>
                 </div>
 
-                {/* SIMs desplegadas */}
                 {open && (
                   <div className="bg-gradient-to-b from-blue-50/60 to-white border-t border-blue-100 p-2 space-y-0.5">
                     {sortedSims.length === 0 ? (
@@ -253,7 +249,6 @@ const OrgLegend = ({ orgRows, expandedOrg, setExpandedOrg }) => {
                                 </div>
                               </div>
 
-                              {/* ICC desplegable con botón copiar */}
                               {keyOpen && (
                                 <div className="mt-1 flex items-center gap-1">
                                   <span className="flex-1 font-mono text-[10px] text-blue-400 bg-blue-50 px-2 py-0.5 rounded-md select-all border border-blue-100 truncate">
@@ -289,13 +284,11 @@ const OrgLegend = ({ orgRows, expandedOrg, setExpandedOrg }) => {
   );
 };
 
-// ---------------------------------------------
-
 const PoolView = () => {
   const [rawPools, setRawPools] = useState([]);
   const [chartLimit, setChartLimit] = useState(10);
   const [rawM2M, setRawM2M] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
 
   const [selectedOrg, setSelectedOrg] = useState('ALL');
   const [drillOrganization, setDrillOrganization] = useState(null);
@@ -310,11 +303,25 @@ const PoolView = () => {
 
   useEffect(() => {
     const fetchAll = async () => {
+      // Si ya existen datos en caché, se cargan instantáneamente sin consultar la API
+      if (poolCache.pools && poolCache.m2m) {
+        setRawPools(poolCache.pools);
+        setRawM2M(poolCache.m2m);
+        return;
+      }
+
       setLoading(true);
       try {
         const [poolsRes, m2mRes] = await Promise.all([api.getPool(1, 5000), api.getM2M(1, 5000)]);
-        setRawPools(Array.isArray(poolsRes) ? poolsRes : poolsRes?.items || []);
-        setRawM2M(Array.isArray(m2mRes) ? m2mRes : m2mRes?.items || []);
+        const poolsData = Array.isArray(poolsRes) ? poolsRes : poolsRes?.items || [];
+        const m2mData = Array.isArray(m2mRes) ? m2mRes : m2mRes?.items || [];
+
+        // Guardamos en la caché global del archivo
+        poolCache.pools = poolsData;
+        poolCache.m2m = m2mData;
+
+        setRawPools(poolsData);
+        setRawM2M(m2mData);
       } catch (e) {
         console.error('Error fetching pools/m2m:', e);
       } finally {
@@ -382,12 +389,6 @@ const PoolView = () => {
   }, [poolsWithLabels, drillOrganization, searchTerm]);
 
   const totalItems = filteredByControls.length;
-  const totalPages = Math.max(1, Math.ceil(totalItems / rowsPerPage));
-
-  const paginatedData = useMemo(() => {
-    const startIndex = (currentPage - 1) * rowsPerPage;
-    return filteredByControls.slice(startIndex, startIndex + rowsPerPage);
-  }, [filteredByControls, currentPage, rowsPerPage]);
 
   const stats = useMemo(() => {
     return filteredByControls.reduce(
@@ -603,7 +604,6 @@ const PoolView = () => {
             defaultMode: 'show',
             render: () => (
               <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 w-full">
-                {/* CHART */}
                 <div className="lg:col-span-9 bg-white p-6 rounded-lg shadow-md h-[620px] min-h-0 flex flex-col">
                   <div className="flex justify-between items-start mb-3 flex-shrink-0">
                     <div>
@@ -633,9 +633,8 @@ const PoolView = () => {
                     </div>
                   </div>
 
-                  {/* Leyenda de estados */}
                   <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 mb-3 flex-shrink-0">
-                    {STATUS_LEGEND.map(({ color, label, range }) => (
+                    ={STATUS_LEGEND.map(({ color, label, range }) => (
                       <div key={label} className="flex items-center gap-1.5">
                         <span className="w-2.5 h-2.5 rounded-sm flex-shrink-0" style={{ backgroundColor: color }} />
                         <span className="text-[10px] text-gray-500 font-medium">
@@ -649,7 +648,6 @@ const PoolView = () => {
                     </div>
                   </div>
 
-                  {/* Gráfica */}
                   <div className="flex-1 min-h-0">
                     <ResponsiveContainer width="100%" height="100%">
                       <BarChart
@@ -678,7 +676,6 @@ const PoolView = () => {
                         />
                         <Tooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(59,130,246,0.05)' }} />
 
-                        {/* BARRA CONSUMO */}
                         <Bar
                           dataKey="Consumo"
                           name="Consumo (GB)"
@@ -712,7 +709,6 @@ const PoolView = () => {
                           }}
                         />
 
-                        {/* BARRA LÍMITE */}
                         <Bar
                           dataKey="Limite"
                           name="Límite (GB)"
@@ -739,7 +735,6 @@ const PoolView = () => {
                   </div>
                 </div>
 
-                {/* LEGEND / SIMS */}
                 <div className="lg:col-span-3">
                   <OrgLegend
                     orgRows={orgLegendRows}
@@ -794,7 +789,6 @@ const PoolView = () => {
             accessor: 'organization',
            render: (r) => {
                          const color = getOrgColor(r.organization);
-                         const hasCorp = color !== '#94a3b8';
                          return (
                            <span
                              className="px-2 py-1 rounded text-xs font-bold uppercase tracking-wide whitespace-nowrap"
@@ -873,7 +867,7 @@ const PoolView = () => {
         currentPage={currentPage}
         setCurrentPage={setCurrentPage}
         totalItems={totalItems}
-        totalPages={totalPages}
+        totalPages={Math.max(1, Math.ceil(totalItems / rowsPerPage))}
       />
     </div>
   );

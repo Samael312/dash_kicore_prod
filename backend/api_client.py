@@ -80,6 +80,10 @@ class CoreClient:
     def get_vpn_status(self):
         return self._get_data(Settings.URL_VPN_STATUS, "resources/vpn_status.xlsx")
     
+    def get_alarms(self, state="1,2"):
+        params = {"state": state}
+        return self._get_data(Settings.URL_ALARMS, "resources/alarms.xlsx", params=params)
+    
 
     def get_m2m_renewals(self, show_all=True, from_date=None, to=None):
         params = {}

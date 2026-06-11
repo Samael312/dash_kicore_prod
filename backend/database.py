@@ -1,5 +1,5 @@
 import mysql.connector
-from config.settings import Settings
+from backend.config.settings import Settings
 
 class DatabaseAdapter:
     def __init__(self):
@@ -53,14 +53,18 @@ class DatabaseAdapter:
             if 'conn' in locals(): conn.close()
 
     def get_history_counts(self, limit=50):
-        query = "SELECT * FROM alarm_counts ORDER BY id DESC LIMIT %s"
+        # Seleccionamos los últimos 'limit' registros (los más recientes), pero los ordenamos ascendentemente por ID para la gráfica
+        query = """
+            SELECT * FROM (
+                SELECT * FROM alarm_counts ORDER BY id DESC LIMIT %s
+            ) AS sub ORDER BY id ASC
+        """
         try:
             conn = self.get_connection()
             cursor = conn.cursor(dictionary=True)
             cursor.execute(query, (limit,))
             result = cursor.fetchall()
-            # Devolver en orden cronológico (ascendente)
-            return list(reversed(result))
+            return result # Ya viene en orden cronológico perfecto para el Line Chart
         except mysql.connector.Error as err:
             print(f"❌ Error al consultar histórico: {err}")
             return []

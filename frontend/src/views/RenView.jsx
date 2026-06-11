@@ -1,6 +1,7 @@
 // RenewalsDashboard.jsx
 import React, { useEffect, useMemo, useState } from 'react';
 import { api } from '../services/api';
+import useCachedFetch from '../hooks/useCachedFetch'; // Hook unificado de la app
 import TableCard from '../components/TableCard';
 import BarChartCard from '../components/BarChartCard';
 import PieChartCard from '../components/PieChartCard';
@@ -24,33 +25,47 @@ const CHART_COLORS = ['#10B981', '#F59E0B', '#EF4444', '#3B82F6', '#8B5CF6', '#6
 const toUpper = (str) => (str || '').toString().trim().toUpperCase();
 
 // Valores de state_label devueltos por el backend
-const SL_ACTIVE   = 'ACTIVA';    // "active"   → "Activa"
-const SL_EXPIRED  = 'EXPIRADA';  // "expired"  → "Expirada"
+const SL_ACTIVE   = 'ACTIVA';
+const SL_EXPIRED  = 'EXPIRADA';
 
 // Helpers de clasificación KPI — fuente única para conteo Y filtrado
 const getStateLabel = (d) => toUpper(d.state_label || '');
-const diffDays      = (d) => d.date_to_renew
+const diffDays = (d) => d.date_to_renew
   ? Math.ceil((new Date(d.date_to_renew) - new Date()) / (1000 * 60 * 60 * 24))
   : null;
 
-// KPI Activas        → state_label === ACTIVA
-const isActive        = (d) => getStateLabel(d) === SL_ACTIVE;
-// KPI Por Vencer     → state_label === ACTIVA && fecha entre hoy y 30 días
-const isExpiringSoon  = (d) => { const diff = diffDays(d); return getStateLabel(d) === SL_ACTIVE && diff !== null && diff >= 0 && diff <= 30; };
-// KPI Vencidas       → fecha anterior a hoy Y state_label !== ACTIVA
-// KPI Vencidas       → date_to_renew anterior a hoy (sin importar state_label)
-const isExpired       = (d) => { const diff = diffDays(d); return diff !== null && diff < 0; };
-// KPI Activas/Venc   → state_label === EXPIRADA
+// KPI Activas → state_label === ACTIVA
+const isActive = (d) => getStateLabel(d) === SL_ACTIVE;
+
+// KPI Por Vencer → state_label === ACTIVA && fecha entre hoy y 30 días
+const isExpiringSoon = (d) => { 
+  const diff = diffDays(d); 
+  return getStateLabel(d) === SL_ACTIVE && diff !== null && diff >= 0 && diff <= 30; 
+};
+
+// KPI Vencidas → date_to_renew anterior a hoy
+const isExpired = (d) => { 
+  const diff = diffDays(d); 
+  return diff !== null && diff < 0; 
+};
+
+// KPI Expiradas (Histórico/Estatus) → state_label === EXPIRADA
 const isActiveExpired = (d) => getStateLabel(d) === SL_EXPIRED;
 
-
-// --- DEVICE ITEM ---
+// --- DEVICE ITEM (Sub-componente del LegendBox) ---
 const DeviceItem = ({ device }) => {
   const [showUuid, setShowUuid] = useState(false);
-  const copyToClipboard = (e, text) => { e.stopPropagation(); navigator.clipboard.writeText(text); };
+  const copyToClipboard = (e, text) => { 
+    e.stopPropagation(); 
+    navigator.clipboard.writeText(text); 
+  };
+  
   return (
     <div className="flex flex-col border-l-2 border-blue-200 ml-1">
-      <div onClick={() => setShowUuid(!showUuid)} className="flex items-center gap-2 pl-4 py-1.5 text-xs text-gray-600 hover:bg-blue-50 cursor-pointer transition-colors group">
+      <div 
+        onClick={() => setShowUuid(!showUuid)} 
+        className="flex items-center gap-2 pl-4 py-1.5 text-xs text-gray-600 hover:bg-blue-50 cursor-pointer transition-colors group"
+      >
         <Monitor size={12} className="text-gray-400" />
         <span className="truncate flex-grow">
           <span className="font-medium text-gray-700">{device.name || 'Sin Nombre'}</span>
@@ -63,7 +78,10 @@ const DeviceItem = ({ device }) => {
         <div className="pl-8 pr-2 pb-2 pt-1">
           <div className="bg-white border border-blue-100 rounded p-2 flex items-center justify-between shadow-sm">
             <code className="text-[10px] font-mono text-blue-600 break-all">{device.uuid}</code>
-            <button onClick={(e) => copyToClipboard(e, device.uuid)} className="p-1 hover:bg-gray-100 rounded text-gray-400 hover:text-blue-500">
+            <button 
+              onClick={(e) => copyToClipboard(e, device.uuid)} 
+              className="p-1 hover:bg-gray-100 rounded text-gray-400 hover:text-blue-500"
+            >
               <Copy size={10} />
             </button>
           </div>
@@ -88,18 +106,28 @@ const KPICard = ({ title, value, icon, color, onClick, active }) => (
       <p className="text-xs font-bold text-gray-500 uppercase tracking-wide">{title}</p>
       <p className="text-3xl font-bold text-gray-800">{value ?? 0}</p>
     </div>
-    {active && <span className="ml-auto text-[10px] font-bold text-blue-500 bg-blue-50 border border-blue-200 rounded-full px-2 py-0.5">activo</span>}
+    {active && (
+      <span className="ml-auto text-[10px] font-bold text-blue-500 bg-blue-50 border border-blue-200 rounded-full px-2 py-0.5">
+        activo
+      </span>
+    )}
   </div>
 );
 
-// --- LEGEND BOX ---
+// --- LEGEND BOX (Desglose lateral de la línea de tiempo) ---
 const LegendBox = ({ data, title, subtitle }) => {
   const [expandedDay, setExpandedDay] = useState(null);
+  
   return (
-    <div className="bg-white border border-gray-100 rounded-xl shadow-md h-full flex flex-col overflow-hidden max-h-[320px] lg:max-h-[380px]" style={{ boxShadow: '0 4px 24px 0 rgba(59,130,246,0.07)' }}>
+    <div 
+      className="bg-white border border-gray-100 rounded-xl shadow-md h-full flex flex-col overflow-hidden max-h-[320px] lg:max-h-[380px]" 
+      style={{ boxShadow: '0 4px 24px 0 rgba(59,130,246,0.07)' }}
+    >
       <div className="px-5 py-4 border-b border-gray-100" style={{ background: 'linear-gradient(135deg, #f0f6ff 0%, #f8fafc 100%)' }}>
         <h4 className="text-xs font-bold text-blue-700 uppercase tracking-widest flex items-center gap-2">
-          <span className="bg-blue-100 rounded-lg p-1.5 flex items-center justify-center"><Calendar size={14} className="text-blue-500" /></span>
+          <span className="bg-blue-100 rounded-lg p-1.5 flex items-center justify-center">
+            <Calendar size={14} className="text-blue-500" />
+          </span>
           {title || 'Vencimientos'}
         </h4>
         {subtitle && <p className="text-[11px] text-blue-400 mt-1.5 font-medium pl-0.5">{subtitle}</p>}
@@ -107,27 +135,43 @@ const LegendBox = ({ data, title, subtitle }) => {
       <div className="overflow-y-auto flex-grow p-2.5 space-y-1">
         {!data || data.length === 0 ? (
           <div className="h-full flex flex-col items-center justify-center text-gray-300 text-sm p-4 text-center gap-3">
-            <div className="bg-gray-50 rounded-full p-4"><MousePointerClick size={28} className="text-gray-300" /></div>
+            <div className="bg-gray-50 rounded-full p-4">
+              <MousePointerClick size={28} className="text-gray-300" />
+            </div>
             <p className="text-xs text-gray-400 leading-relaxed">Selecciona un punto<br/>en el gráfico de línea</p>
           </div>
         ) : (
           data.map((dayGroup, idx) => (
-            <div key={idx} className="border border-gray-100 rounded-lg bg-white overflow-hidden hover:border-blue-100" style={{ boxShadow: '0 1px 4px 0 rgba(0,0,0,0.04)' }}>
-              <div onClick={() => setExpandedDay(expandedDay === dayGroup.date ? null : dayGroup.date)}
-                className={`flex items-center justify-between py-2.5 px-3 cursor-pointer transition-colors ${expandedDay === dayGroup.date ? 'bg-blue-50' : 'hover:bg-slate-50'}`}>
+            <div 
+              key={idx} 
+              className="border border-gray-100 rounded-lg bg-white overflow-hidden hover:border-blue-100" 
+              style={{ boxShadow: '0 1px 4px 0 rgba(0,0,0,0.04)' }}
+            >
+              <div 
+                onClick={() => setExpandedDay(expandedDay === dayGroup.date ? null : dayGroup.date)}
+                className={`flex items-center justify-between py-2.5 px-3 cursor-pointer transition-colors ${
+                  expandedDay === dayGroup.date ? 'bg-blue-50' : 'hover:bg-slate-50'
+                }`}
+              >
                 <div className="flex items-center gap-2">
                   <span className={`transition-transform duration-200 ${expandedDay === dayGroup.date ? 'rotate-90' : ''}`}>
                     <ChevronRight size={13} className={expandedDay === dayGroup.date ? 'text-blue-500' : 'text-gray-300'} />
                   </span>
-                  <span className={`text-xs font-semibold ${expandedDay === dayGroup.date ? 'text-blue-700' : 'text-gray-600'}`}>{dayGroup.date}</span>
+                  <span className={`text-xs font-semibold ${expandedDay === dayGroup.date ? 'text-blue-700' : 'text-gray-600'}`}>
+                    {dayGroup.date}
+                  </span>
                 </div>
-                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${expandedDay === dayGroup.date ? 'bg-blue-100 text-blue-600' : 'bg-gray-100 text-gray-500'}`}>
+                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                  expandedDay === dayGroup.date ? 'bg-blue-100 text-blue-600' : 'bg-gray-100 text-gray-500'
+                }`}>
                   {dayGroup.count} disp.
                 </span>
               </div>
               {expandedDay === dayGroup.date && (
                 <div className="bg-gradient-to-b from-blue-50/60 to-white border-t border-blue-100 p-2 space-y-1">
-                  {dayGroup.devices.map((device, dIdx) => <DeviceItem key={dIdx} device={device} />)}
+                  {dayGroup.devices.map((device, dIdx) => (
+                    <DeviceItem key={dIdx} device={device} />
+                  ))}
                 </div>
               )}
             </div>
@@ -141,33 +185,25 @@ const LegendBox = ({ data, title, subtitle }) => {
 // ─────────────────────────────────────────────────────────────────────────────
 
 const RenewalsDashboard = () => {
-  const [rawData, setRawData] = useState([]);
-  const [loading, setLoading] = useState(true);
+  // Petición unificada usando la arquitectura de caché del M2MView
+  const { data: rawData, loading } = useCachedFetch(
+    'renewals',
+    () => api.getRenewals(1, 5000).then(res => Array.isArray(res) ? res : (res?.items || []))
+  );
+
   const [activeTab, setActiveTab] = useState('all');
   const [searchTerm, setSearchTerm] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const [rowsPerPage, setRowsPerPage] = useState(10);
   const [selectedMonthData, setSelectedMonthData] = useState({ title: '', subtitle: '', data: [] });
+  
+  // Estados para Drilldowns interactivos
   const [drilldownState, setDrilldownState] = useState(null);
   const [drilldownModel, setDrilldownModel] = useState(null);
   const [drilldownStatus, setDrilldownStatus] = useState(null);
   const [drilldownKpi, setDrilldownKpi] = useState(null);
 
-  useEffect(() => {
-    const fetchData = async () => {
-      setLoading(true);
-      try {
-        const res = await api.getRenewals(1, 5000);
-        setRawData(Array.isArray(res) ? res : res?.items || []);
-      } catch (e) {
-        console.error('Error fetching data:', e);
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchData();
-  }, []);
-
+  // Renderizador de badges en tabla
   const getStatusBadge = (dateStr) => {
     if (!dateStr) return <span className="px-2 py-1 bg-gray-100 text-gray-600 rounded-full text-xs font-bold">INDEFINIDO</span>;
     const diff = Math.ceil((new Date(dateStr) - new Date()) / (1000 * 60 * 60 * 24));
@@ -176,8 +212,7 @@ const RenewalsDashboard = () => {
     return <span className="px-2 py-1 bg-green-100 text-green-700 rounded-full text-xs font-bold flex items-center"><CheckCircle size={12} className="mr-1" /> ACTIVO ({diff} días)</span>;
   };
 
-  // status_label por fecha — usado solo para PieChart "Estado de Renovación" y badge de tabla
-  // state_label viene del backend y es la fuente de verdad para los KPIs
+  // Pre-procesamiento de estatus temporal basado en la fecha calculada en cliente
   const dataWithStatusLabel = useMemo(() => {
     const today = new Date();
     return (rawData || []).map((r) => {
@@ -192,12 +227,14 @@ const RenewalsDashboard = () => {
     });
   }, [rawData]);
 
+  // Filtro por pestañas principales (M2M vs Planes)
   const dataByTab = useMemo(() => {
     if (activeTab === 'm2m')  return dataWithStatusLabel.filter((d) => Boolean(d.icc));
     if (activeTab === 'plan') return dataWithStatusLabel.filter((d) => !d.icc);
     return dataWithStatusLabel;
   }, [dataWithStatusLabel, activeTab]);
 
+  // Aplicación cruzada de Drilldowns (Filtros en cadena)
   const filteredByControls = useMemo(() => {
     let data = dataByTab;
     if (drilldownState)  data = data.filter((d) => toUpper(d.state_label || '') === drilldownState);
@@ -215,6 +252,7 @@ const RenewalsDashboard = () => {
     return data;
   }, [dataByTab, drilldownState, drilldownModel, drilldownStatus, drilldownKpi]);
 
+  // Agrupamiento, conteo y estructuración de datos para gráficas (Optimizado en un solo recorrido)
   const processed = useMemo(() => {
     const source = filteredByControls;
     if (!source || source.length === 0) {
@@ -231,34 +269,31 @@ const RenewalsDashboard = () => {
     source.forEach((device) => {
       totalDevices++;
 
-      // PieChart "Estado de Producción" → state_label del backend
       const state = toUpper(device.state_label || 'Desconocido');
       stateCount[state] = (stateCount[state] || 0) + 1;
 
       const model = toUpper(device.model_name || 'Desconocido');
       modelCount[model] = (modelCount[model] || 0) + 1;
 
-      // PieChart "Estado de Renovación" → status_label por fecha
       const sl = toUpper(device.status_label || 'INDEFINIDO');
       statusCount[sl] = (statusCount[sl] || 0) + 1;
 
-      // KPIs — mismos helpers que el filtro drilldown
       if (isActive(device))        active++;
       if (isExpiringSoon(device))  expiringSoon++;
       if (isExpired(device))       expired++;
       if (isActiveExpired(device)) activeExpired++;
 
-      // Gráfica de línea — solo dispositivos con fecha de renovación
       if (device.date_to_renew) {
         const renewDate = new Date(device.date_to_renew);
         if (!isNaN(renewDate)) {
-          let color;
+          let color = '#16a34a';
           if      (sl === 'VENCIDO')    color = '#dc2626';
           else if (sl === 'POR VENCER') color = '#eab308';
-          else                          color = '#16a34a';
 
-          const monthKey = renewDate.toISOString().slice(0, 7);
-          if (!renewalsTimeline[monthKey]) renewalsTimeline[monthKey] = { count: 0, items: [], colors: [] };
+          const monthKey = renewDate.toISOString().slice(0, 7); // Formato YYYY-MM
+          if (!renewalsTimeline[monthKey]) {
+            renewalsTimeline[monthKey] = { count: 0, items: [], colors: [] };
+          }
           renewalsTimeline[monthKey].count++;
           renewalsTimeline[monthKey].colors.push(color);
           renewalsTimeline[monthKey].items.push({
@@ -300,17 +335,20 @@ const RenewalsDashboard = () => {
     };
   }, [filteredByControls]);
 
+  // Manejador del click en puntos de la gráfica lineal
   const handleSelection = (index) => {
     const lc = processed.lineChartData;
     if (!lc?.labels?.[index]) return;
     const monthLabel = lc.labels[index];
     const itemsArray = lc.datasets?.[0]?.extraData?.[index] || [];
     const groups = {};
+    
     itemsArray.forEach((item) => {
       if (!groups[item.date]) groups[item.date] = { date: item.date, count: 0, devices: [] };
       groups[item.date].count++;
       groups[item.date].devices.push(item);
     });
+    
     setSelectedMonthData({
       title:    `Vencimientos: ${monthLabel}`,
       subtitle: `${itemsArray.length} dispositivos`,
@@ -318,20 +356,39 @@ const RenewalsDashboard = () => {
     });
   };
 
+  // Monitoreo seguro de la firma de labels para autoseleccionar el último mes útil
+  const labelsSignature = processed?.lineChartData?.labels?.join('|') || '';
   useEffect(() => {
     const labels = processed?.lineChartData?.labels || [];
-    if (labels.length > 0) handleSelection(labels.length - 1);
+    if (labels.length > 0) {
+      handleSelection(labels.length - 1);
+    } else {
+      setSelectedMonthData({ title: '', subtitle: '', data: [] });
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [processed.lineChartData.labels?.join('|')]);
+  }, [labelsSignature]);
 
   const safeExtractLabel = (item) => (typeof item === 'object' ? (item.name || item.label) : item);
-  const clearDrilldowns = () => { setDrilldownState(null); setDrilldownModel(null); setDrilldownStatus(null); setDrilldownKpi(null); setCurrentPage(1); };
-  const switchTab = (tab) => { setActiveTab(tab); clearDrilldowns(); setSearchTerm(''); };
+  
+  const clearDrilldowns = () => { 
+    setDrilldownState(null); 
+    setDrilldownModel(null); 
+    setDrilldownStatus(null); 
+    setDrilldownKpi(null); 
+    setCurrentPage(1); 
+  };
+  
+  const switchTab = (tab) => { 
+    setActiveTab(tab); 
+    clearDrilldowns(); 
+    setSearchTerm(''); 
+  };
 
   const totalItems      = filteredByControls.length;
   const totalPages      = Math.max(1, Math.ceil(totalItems / rowsPerPage));
   const hasActiveFilter = Boolean(drilldownState || drilldownModel || drilldownStatus || drilldownKpi);
 
+  // Columnas de la tabla reactivas al contexto del Tab
   const tableColumns = useMemo(() => {
     const colDevice = {
       header: 'Dispositivo / Cliente', accessor: 'm2m_name',
@@ -368,9 +425,9 @@ const RenewalsDashboard = () => {
       header: 'Renovación', accessor: 'status_label',
       render: (r) => getStatusBadge(r.date_to_renew),
     };
+    
     if (activeTab === 'm2m') return [colDevice, colModel, colRenewalDate, colEstado, colRenovacion];
     return [colDevice, colModel, colRenewalDate, colSubscription, colEstado, colRenovacion];
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab]);
 
   if (loading) {
@@ -393,14 +450,22 @@ const RenewalsDashboard = () => {
             { key: 'm2m',  label: 'M2M',    icon: <Wifi size={16} /> },
             { key: 'plan', label: 'Planes',  icon: <Box size={16} /> },
           ].map(({ key, label, icon }) => (
-            <button key={key} onClick={() => switchTab(key)}
-              className={`px-4 py-2 rounded-md text-sm font-medium transition-colors flex items-center gap-2 ${activeTab === key ? 'bg-white shadow text-blue-600' : 'text-gray-600 hover:text-gray-900'}`}>
+            <button 
+              key={key} 
+              onClick={() => switchTab(key)}
+              className={`px-4 py-2 rounded-md text-sm font-medium transition-colors flex items-center gap-2 ${
+                activeTab === key ? 'bg-white shadow text-blue-600' : 'text-gray-600 hover:text-gray-900'
+              }`}
+            >
               {icon}{label}
             </button>
           ))}
         </div>
         {hasActiveFilter && (
-          <button onClick={clearDrilldowns} className="px-4 py-2 bg-red-100 text-red-700 rounded hover:bg-red-200 text-sm font-bold border border-red-200 transition-colors">
+          <button 
+            onClick={clearDrilldowns} 
+            className="px-4 py-2 bg-red-100 text-red-700 rounded hover:bg-red-200 text-sm font-bold border border-red-200 transition-colors"
+          >
             Limpiar filtros ✕
           </button>
         )}
@@ -408,22 +473,34 @@ const RenewalsDashboard = () => {
 
       {/* KPIs */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <KPICard title="Total"              value={processed.kpis.totalDevices}  icon={<Server />}      color="bg-blue-500" />
-        <KPICard title="Activas"            value={processed.kpis.active}        icon={<CheckCircle />} color="bg-green-500"
+        <KPICard title="Total" value={processed.kpis.totalDevices} icon={<Server />} color="bg-blue-500" />
+        <KPICard 
+          title="Activas" 
+          value={processed.kpis.active} 
+          icon={<CheckCircle />} 
+          color="bg-green-500"
           active={drilldownKpi === 'active'}
-          onClick={() => { setDrilldownKpi(drilldownKpi === 'active' ? null : 'active'); setCurrentPage(1); }} />
-        <KPICard title="Por Vencer"         value={processed.kpis.expiringSoon}  icon={<Clock />}       color="bg-yellow-500"
+          onClick={() => { setDrilldownKpi(drilldownKpi === 'active' ? null : 'active'); setCurrentPage(1); }} 
+        />
+        <KPICard 
+          title="Por Vencer" 
+          value={processed.kpis.expiringSoon} 
+          icon={<Clock />} 
+          color="bg-yellow-500"
           active={drilldownKpi === 'expiringSoon'}
-          onClick={() => { setDrilldownKpi(drilldownKpi === 'expiringSoon' ? null : 'expiringSoon'); setCurrentPage(1); }} />
-        {/* <KPICard title="Vencidas"           value={processed.kpis.expired}       icon={<AlertCircle />} color="bg-red-500"
-          active={drilldownKpi === 'expired'}
-          onClick={() => { setDrilldownKpi(drilldownKpi === 'expired' ? null : 'expired'); setCurrentPage(1); }} />*/}
-        <KPICard title="Expiradas" value={processed.kpis.activeExpired} icon={<Zap />}         color="bg-purple-500"
+          onClick={() => { setDrilldownKpi(drilldownKpi === 'expiringSoon' ? null : 'expiringSoon'); setCurrentPage(1); }} 
+        />
+        <KPICard 
+          title="Expiradas" 
+          value={processed.kpis.activeExpired} 
+          icon={<Zap />} 
+          color="bg-purple-500"
           active={drilldownKpi === 'activeExpired'}
-          onClick={() => { setDrilldownKpi(drilldownKpi === 'activeExpired' ? null : 'activeExpired'); setCurrentPage(1); }} />
+          onClick={() => { setDrilldownKpi(drilldownKpi === 'activeExpired' ? null : 'activeExpired'); setCurrentPage(1); }} 
+        />
       </div>
 
-      {/* VISUALIZACIONES */}
+      {/* VISUALIZACIONES DINÁMICAS */}
       <SelectDash
         storageKey="renewalsDashboard:sections"
         headerTitle="Visualizaciones"
@@ -452,19 +529,26 @@ const RenewalsDashboard = () => {
                 title="Distribución por Modelo" legendTitle="Modelos visibles"
                 data={processed.modelStats} labelKey="name" valueKey="value" heightClass="h-96" indexAxis="y"
                 selectedLabel={drilldownModel} getColor={(i) => CHART_COLORS[i % CHART_COLORS.length]}
-                onBarClick={(item) => { setDrilldownModel(safeExtractLabel(item)); setDrilldownState(null); setDrilldownStatus(null); setCurrentPage(1); }}
+                onBarClick={(item) => { 
+                  setDrilldownModel(safeExtractLabel(item)); 
+                  setDrilldownState(null); 
+                  setDrilldownStatus(null); 
+                  setCurrentPage(1); 
+                }}
               />
             ),
           },
         ]}
       />
 
-      {/* LÍNEA DE TIEMPO */}
+      {/* LÍNEA DE TIEMPO INTERACTIVA */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         <div className="lg:col-span-8 bg-white rounded-xl border border-gray-100 overflow-hidden" style={{ boxShadow: '0 4px 24px 0 rgba(59,130,246,0.07)' }}>
           <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between" style={{ background: 'linear-gradient(135deg, #f0f6ff 0%, #f8fafc 100%)' }}>
             <div className="flex items-center gap-2.5">
-              <span className="bg-blue-100 rounded-lg p-1.5 flex items-center justify-center"><Calendar size={15} className="text-blue-500" /></span>
+              <span className="bg-blue-100 rounded-lg p-1.5 flex items-center justify-center">
+                <Calendar size={15} className="text-blue-500" />
+              </span>
               <h3 className="text-xs font-bold text-blue-700 uppercase tracking-widest">Próximos Vencimientos</h3>
             </div>
             <div className="flex items-center gap-3">
@@ -473,14 +557,18 @@ const RenewalsDashboard = () => {
                 <span className="flex items-center gap-1.5 text-[10px] font-semibold text-yellow-600"><span className="w-3 h-3 rounded-full bg-yellow-400 inline-block shadow-sm" />Por vencer</span>
                 <span className="flex items-center gap-1.5 text-[10px] font-semibold text-green-600"><span className="w-3 h-3 rounded-full bg-green-500 inline-block shadow-sm" />Activo</span>
               </div>
-              <span className="text-[10px] text-gray-400 font-medium bg-white border border-gray-100 rounded-full px-3 py-1 shadow-sm">Haz clic en un punto para ver detalles</span>
+              <span className="text-[10px] text-gray-400 font-medium bg-white border border-gray-100 rounded-full px-3 py-1 shadow-sm">
+                Haz clic en un punto para ver detalles
+              </span>
             </div>
           </div>
+          
           <div className="flex sm:hidden items-center gap-4 px-6 pt-4">
             <span className="flex items-center gap-1.5 text-[10px] font-semibold text-red-600"><span className="w-3 h-3 rounded-full bg-red-500 inline-block" />Vencido</span>
             <span className="flex items-center gap-1.5 text-[10px] font-semibold text-yellow-600"><span className="w-3 h-3 rounded-full bg-yellow-400 inline-block" />Por vencer</span>
             <span className="flex items-center gap-1.5 text-[10px] font-semibold text-green-600"><span className="w-3 h-3 rounded-full bg-green-500 inline-block" />Activo</span>
           </div>
+
           <div className="p-6">
             <div className="h-80 relative">
               <Line
@@ -488,7 +576,12 @@ const RenewalsDashboard = () => {
                   ...processed.lineChartData,
                   datasets: processed.lineChartData.datasets.map(ds => ({
                     ...ds,
-                    segment: { borderColor: (ctx) => { const c = ds.backgroundColor; return Array.isArray(c) ? (c[ctx.p0DataIndex] ?? c[0]) : c; } },
+                    segment: { 
+                      borderColor: (ctx) => { 
+                        const c = ds.backgroundColor; 
+                        return Array.isArray(c) ? (c[ctx.p0DataIndex] ?? c[0]) : c; 
+                      } 
+                    },
                     borderColor: 'transparent',
                     pointBackgroundColor: ds.backgroundColor,
                     pointBorderColor: '#fff',
@@ -499,7 +592,8 @@ const RenewalsDashboard = () => {
                   }))
                 }}
                 options={{
-                  responsive: true, maintainAspectRatio: false,
+                  responsive: true, 
+                  maintainAspectRatio: false,
                   onClick: (_, el) => el.length > 0 && handleSelection(el[0].index),
                   plugins: {
                     legend: { display: false },
@@ -524,12 +618,13 @@ const RenewalsDashboard = () => {
             </div>
           </div>
         </div>
+        
         <div className="lg:col-span-4">
           <LegendBox title={selectedMonthData.title} subtitle={selectedMonthData.subtitle} data={selectedMonthData.data} />
         </div>
       </div>
 
-      {/* TABLA */}
+      {/* TABLA PRINCIPAL */}
       <TableCard
         title="Listado de Renovaciones"
         data={filteredByControls}

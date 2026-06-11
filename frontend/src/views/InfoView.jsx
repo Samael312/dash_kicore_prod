@@ -1,5 +1,7 @@
-// InfoView.jsx
+// InfoView.jsx (con DashboardSectionManager e integración useCachedFetch)
 import React, { useEffect, useMemo, useState, useRef } from 'react';
+// Importación por defecto del hook de caché del proyecto
+import useCachedFetch from '../hooks/useCachedFetch';
 import { api } from '../services/api';
 import TableCard from '../components/TableCard';
 import BarChartCard from '../components/BarChartCard';
@@ -67,22 +69,22 @@ const getVersionScore = (v) => {
   const year = parseInt(match[1], 10);
   const month = parseInt(match[2], 10);
   const ver = parseFloat(match[3]);
-  return year * 100000 + month * 1000 + ver;
+  return year * 100000 + month * 100 + ver;
 };
 
 const ALL_COLUMNS = [
-  { id: 'uuid',            label: 'UUID',           defaultVisible: true  },
-  { id: 'quiiotd_version', label: 'Versión',        defaultVisible: true  },
-  { id: 'compilation_date',label: 'Compilación',    defaultVisible: true  },
-  { id: 'update_status',   label: 'Estado',         defaultVisible: true  },
-  { id: 'board_model',     label: 'Placa',          defaultVisible: true  },
-  { id: 'osname',          label: 'SO',             defaultVisible: false },
-  { id: 'uptime',          label: 'Uptime',         defaultVisible: false },
-  { id: 'sys_temp_c',      label: 'Temp / RAM',     defaultVisible: true  },
-  { id: 'free_size_mb',    label: 'Disco libre',    defaultVisible: false },
-  { id: 'interfaces',      label: 'Interfaces',     defaultVisible: false },
-  { id: 'info_timestamp',  label: 'Última info',    defaultVisible: true  },
-  { id: 'update_ts',       label: 'Actualizado en', defaultVisible: false },
+  { id: 'uuid',             label: 'UUID',           defaultVisible: true  },
+  { id: 'quiiotd_version',  label: 'Versión',        defaultVisible: true  },
+  { id: 'compilation_date', label: 'Compilación',    defaultVisible: true  },
+  { id: 'update_status',    label: 'Estado',         defaultVisible: true  },
+  { id: 'board_model',      label: 'Placa',          defaultVisible: true  },
+  { id: 'osname',           label: 'SO',             defaultVisible: false },
+  { id: 'uptime',           label: 'Uptime',         defaultVisible: false },
+  { id: 'sys_temp_c',       label: 'Temp / RAM',     defaultVisible: true  },
+  { id: 'free_size_mb',     label: 'Disco libre',    defaultVisible: false },
+  { id: 'interfaces',       label: 'Interfaces',     defaultVisible: false },
+  { id: 'info_timestamp',   label: 'Última info',    defaultVisible: true  },
+  { id: 'update_ts',        label: 'Actualizado en', defaultVisible: false },
 ];
 
 const ColumnToggle = ({ visibleCols, onToggle, onReset }) => {
@@ -137,8 +139,16 @@ const ColumnToggle = ({ visibleCols, onToggle, onReset }) => {
 };
 
 const InfoView = () => {
-  const [data, setData] = useState([]);
-  const [loading, setLoading] = useState(false);
+  // 1. Reemplazo del fetch manual por la abstracción de caché centralizada
+  const { data: fetchRes, loading } = useCachedFetch(
+    'info',
+    () => api.getInfo(1, 5000)
+  );
+
+  // 2. Normalización reactiva y segura del set de datos crudos entrantes
+  const data = useMemo(() => {
+    return Array.isArray(fetchRes) ? fetchRes : [];
+  }, [fetchRes]);
 
   const [searchTerm,       setSearchTerm]       = useState('');
   const [selectedVersion,  setSelectedVersion]  = useState('Todas');
@@ -164,58 +174,42 @@ const InfoView = () => {
 
   const resetCols = () => setVisibleCols(new Set(ALL_COLUMNS.filter((c) => c.defaultVisible).map((c) => c.id)));
 
-  useEffect(() => {
-    const fetchData = async () => {
-      setLoading(true);
-      try {
-        const res = await api.getInfo(1, 5000);
-        setData(res || []);
-      } catch (e) {
-        console.error('Error cargando Info:', e);
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchData();
-  }, []);
-
-  // 1. Versiones BASE (Sin Hash) para el selector de Meta (Objetivo)
+  // Versiones BASE (Sin Hash) para el selector de Meta (Objetivo)
   const sortedBaseVersions = useMemo(() => {
     if (!data || data.length === 0) return [];
     const versions = [...new Set(data.map(d => getBaseVersion(d.quiiotd_version)).filter(v => v !== 'N/A'))];
     return versions.sort((a, b) => getVersionScore(b) - getVersionScore(a));
   }, [data]);
 
-  // 1.5 Versiones COMPLETAS (Con Hash) para el filtro secundario
+  // Versiones COMPLETAS (Con Hash) para el filtro secundario
   const sortedFullVersions = useMemo(() => {
     if (!data || data.length === 0) return [];
     const versions = [...new Set(data.map(d => d.quiiotd_version).filter(v => v && v !== 'N/A'))];
     return versions.sort((a, b) => getVersionScore(b) - getVersionScore(a));
   }, [data]);
 
-  // 2. Autoseleccionar la versión más alta (BASE) al cargar
+  // Autoseleccionar la versión más alta (BASE) al cargar
   useEffect(() => {
     if (sortedBaseVersions.length > 0 && !referenceVersion) {
       setReferenceVersion(sortedBaseVersions[0]); 
     }
   }, [sortedBaseVersions, referenceVersion]);
 
-  // 3. Procesar datos (Mantiene la versión completa original, solo usa la base para el estado)
+  // Procesar datos (Mantiene la versión completa original, solo usa la base para el estado)
   const processedData = useMemo(() => {
-    return (Array.isArray(data) ? data : []).map((d) => {
+    return data.map((d) => {
       const fullVersionStr = d.quiiotd_version || 'N/A';
       const baseVersionStr = getBaseVersion(fullVersionStr);
       
       let calcStatus = 'Sin Datos';
       if (fullVersionStr !== 'N/A') {
-        // La validación se hace contra la versión limpia
         calcStatus = (baseVersionStr === referenceVersion) ? 'Actualizado' : 'Desactualizado';
       }
 
       return {
         ...d,
         uuid:             d.device             || d.uuid             || '—',
-        quiiotd_version:  fullVersionStr, // Mantenemos la versión con HASH para toda la tabla y gráficas
+        quiiotd_version:  fullVersionStr, 
         compilation_date: d.compilation_date   || null,
         update_status:    calcStatus,
         board_model:      d.board_model        || 'Desconocido',
@@ -254,7 +248,6 @@ const InfoView = () => {
   const totalItems = filteredData.length;
   const totalPages = Math.max(1, Math.ceil(totalItems / rowsPerPage));
 
-  // Las estadísticas seguirán usando las versiones completas
   const versionStats = useMemo(() => {
     const stats = {};
     filteredData.forEach((d) => {
@@ -408,7 +401,8 @@ const InfoView = () => {
     .map((c) => allColumnDefs.find((def) => def.id === c.id))
     .filter(Boolean);
 
-  if (loading) {
+  // Validación de loading adaptada para no romper la UX si ya existen datos previos guardados en la caché local
+  if (loading && processedData.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center h-screen bg-gray-50">
         <Loader2 className="animate-spin text-blue-500 mb-2" size={48} />
@@ -435,7 +429,7 @@ const InfoView = () => {
         </div>
         
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          {/* Dropdown para definir la versión objetivo (Usa las versiones base sin hash) */}
+          {/* Dropdown para definir la versión objetivo */}
           <div className="p-3 bg-green-50 rounded-lg border border-green-200">
             <label className="block text-xs font-bold text-green-800 uppercase tracking-wide mb-1">
               Versión Objetivo (Actualizados)
@@ -452,7 +446,7 @@ const InfoView = () => {
             </select>
           </div>
 
-          {/* Filtrar por Versión Completa (Usa las versiones con hash) */}
+          {/* Filtrar por Versión Completa */}
           <div className="pt-3">
             <label className="block text-sm font-medium text-gray-700 mb-1">🔧 Filtrar por Versión</label>
             <select

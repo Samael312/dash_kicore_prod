@@ -7,6 +7,7 @@ import json
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 from backend.cloud_client import CloudClient
+from backend.config.settings import Settings
 from backend.database import DatabaseAdapter
 
 # Mapeo de constantes de Kiconex

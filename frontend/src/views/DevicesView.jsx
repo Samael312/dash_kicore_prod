@@ -1,5 +1,7 @@
-// DevicesView.jsx (con DashboardSectionManager integrado)
-import React, { useEffect, useMemo, useState } from 'react';
+// DevicesView.jsx (con DashboardSectionManager e integración useCachedFetch)
+import React, { useMemo, useState } from 'react';
+// Importación por defecto igual que en M2MView
+import useCachedFetch from '../hooks/useCachedFetch';
 import { api } from '../services/api';
 import TableCard from '../components/TableCard';
 import BarChartCard from '../components/BarChartCard';
@@ -25,14 +27,23 @@ ChartJS.register(CategoryScale, LinearScale, ArcElement, Title, Tooltip, Legend)
 const mapDevice = (d) => ({
   ...d,
   name:         d.comercial_info?.name  || d.name         || '',
-  model_name:   d.comercial_info?.model || d.model_name   || d.model || '',
+  model_name:    d.comercial_info?.model || d.model_name   || d.model || '',
   organization: d.organization          || d.final_client  || '',
   status_clean: d.comercial_info?.state || d.state         || d.status_clean || 'Desconocido',
 });
 
 const DevicesView = () => {
-  const [rawData, setRawData]   = useState([]);
-  const [loading, setLoading]   = useState(false);
+  // 1. Sustitución de estados manuales por la abstracción de caché del hook del proyecto
+  const { data: fetchRes, loading } = useCachedFetch(
+    'devices',
+    () => api.getDevices(1, 5000)
+  );
+
+  // 2. Procesamos y normalizamos los ítems de la respuesta de manera reactiva y eficiente
+  const rawData = useMemo(() => {
+    const items = Array.isArray(fetchRes) ? fetchRes : (fetchRes?.items || []);
+    return items.map(mapDevice);
+  }, [fetchRes]);
 
   const [selectedModel,      setSelectedModel]      = useState('Todos');
   const [selectedOrg,        setSelectedOrg]        = useState('Todas');
@@ -44,22 +55,6 @@ const DevicesView = () => {
   const [searchTerm,   setSearchTerm]   = useState('');
   const [currentPage,  setCurrentPage]  = useState(1);
   const [rowsPerPage,  setRowsPerPage]  = useState(10);
-
-  useEffect(() => {
-    const fetch = async () => {
-      setLoading(true);
-      try {
-        const res = await api.getDevices(1, 5000);
-        const items = Array.isArray(res) ? res : (res?.items || []);
-        setRawData(items.map(mapDevice));
-      } catch (e) {
-        console.error(e);
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetch();
-  }, []);
 
   const isKiwi = useMemo(() => rawData.some((d) => d.ssid), [rawData]);
 
@@ -149,7 +144,8 @@ const DevicesView = () => {
     setCurrentPage(1);
   };
 
-  if (loading) {
+  // Se añade la validación para asegurar que solo bloquee la vista si realmente no hay nada en caché previamente
+  if (loading && rawData.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center h-screen bg-gray-50">
         <Loader2 className="animate-spin text-blue-500 mb-2" size={48} />
@@ -359,7 +355,6 @@ const DevicesView = () => {
             accessor: 'organization',
             render: (r) => {
               const color = getOrgColor(r.organization);
-              const hasCorp = color !== '#94a3b8';
               return (
                 <span
                   className="px-2 py-1 rounded text-xs font-bold uppercase tracking-wide whitespace-nowrap"

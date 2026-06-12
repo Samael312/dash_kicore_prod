@@ -2,17 +2,17 @@
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException, Query, Body
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel # <--- NECESARIO PARA EL BODY DEL POST
+from pydantic import BaseModel 
 import pandas as pd
 import numpy as np
 import math
 
 
 # 1. Imports de tu proyecto
-from api_client import CoreClient
+from config.api_client import CoreClient
 from logic.data_vpn import process_vpn_status
-from cloud_client import CloudClient
-from database import DatabaseAdapter
+from config.cloud_client import CloudClient
+from config.database import DatabaseAdapter
 from logic.data_info import process_devicesInfo 
 from logic.data_device import prepare_boards, prepare_kiwi
 from logic.data_m2m import process_m2m

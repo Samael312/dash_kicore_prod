@@ -1,7 +1,7 @@
 import os
 import pandas as pd
 import requests
-from backend.config.settings import Settings
+from  config.settings import Settings
 
 
 class CloudClient:

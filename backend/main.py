@@ -410,6 +410,44 @@ def get_vpn_status(
         print(f"❌ Error en VPN Status: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+@app.post("/internal/dashboard/alarms/sync")
+async def sync_alarms():
+    """
+    Ejecuta la lógica de process_alarms.py bajo demanda:
+    llama a la Cloud API, categoriza alarmas y guarda en BD.
+    El frontend lo llama al entrar a la vista y al pulsar "Sincronizar".
+    """
+    try:
+        from logic.process_alarms import categorize_alarms, save_to_db
+ 
+        # 1. Obtener alarmas de la API de Cloud (misma llamada que el cron)
+        data = cloud_client.get_alarms(state="1,2")
+ 
+        if not data:
+            return {
+                "ok": False,
+                "message": "La API de Cloud no devolvió datos.",
+                "stats": None
+            }
+ 
+        # 2. Categorizar y persistir en BD
+        results = categorize_alarms(data)
+        save_to_db(results)
+ 
+        # 3. Devolver los contadores recién guardados
+        latest = db.get_latest_counts()
+ 
+        return {
+            "ok": True,
+            "message": "Sincronización completada.",
+            "stats": latest
+        }
+ 
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)

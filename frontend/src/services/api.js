@@ -81,5 +81,15 @@ export const api = {
       console.error("Error en getHistory:", error);
       return { labels: [], datasets: [] }; 
     }
-  }
+  }, 
+  
+  syncAlarms: async () => {
+    try {
+      const response = await axios.post(`${API_BASE}/alarms/sync`);
+      return response.data;
+    } catch (error) {
+      console.error('Error en syncAlarms:', error);
+      throw error; // relanzamos para que AlarmsView lo capture
+    }
+  },
 };

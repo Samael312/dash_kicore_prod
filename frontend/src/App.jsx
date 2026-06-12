@@ -138,7 +138,7 @@ const App = () => {
               {/* LOGO Y TITULO */}
               <div className="flex-shrink-0 flex items-center text-blue-600 font-bold text-lg sm:text-xl tracking-tight mr-4 md:mr-8 select-none">
                 <LayoutDashboard className="mr-1.5 sm:mr-2 flex-shrink-0" size={22} />
-                <span className="truncate max-w-[160px] xs:max-w-none">Metrics Dashboard</span>
+                <span className="truncate max-w-[200px] xs:max-w-none">Metrics Dashboard</span>
               </div>
               
               {/* MENÚS DESPLEGABLES (DESKTOP) */}

@@ -6,6 +6,7 @@ import TableCard from '../components/TableCard';
 import BarChartCard from '../components/BarChartCard';
 import PieChartCard from '../components/PieChartCard';
 import SelectDash from '../components/SelectDash';
+import KpiCard from '../components/KpiCard'; // Importación de los nuevos KPIs comunes
 
 import {
   AlertCircle, CheckCircle, Clock, Server, Loader2, Calendar,
@@ -90,29 +91,6 @@ const DeviceItem = ({ device }) => {
     </div>
   );
 };
-
-// --- KPI CARD ---
-const KPICard = ({ title, value, icon, color, onClick, active }) => (
-  <div
-    onClick={onClick}
-    className={`bg-white p-6 rounded-lg shadow-sm border flex items-center space-x-4 transition-all duration-150
-      ${onClick ? 'cursor-pointer hover:shadow-md hover:-translate-y-0.5' : ''}
-      ${active ? 'ring-2 ring-offset-1 ring-blue-400 border-blue-300' : 'border-gray-200'}`}
-  >
-    <div className={`p-4 rounded-full text-white shadow-sm ${color} ${active ? 'opacity-100' : 'opacity-80'}`}>
-      {React.cloneElement(icon, { size: 28 })}
-    </div>
-    <div>
-      <p className="text-xs font-bold text-gray-500 uppercase tracking-wide">{title}</p>
-      <p className="text-3xl font-bold text-gray-800">{value ?? 0}</p>
-    </div>
-    {active && (
-      <span className="ml-auto text-[10px] font-bold text-blue-500 bg-blue-50 border border-blue-200 rounded-full px-2 py-0.5">
-        activo
-      </span>
-    )}
-  </div>
-);
 
 // --- LEGEND BOX (Desglose lateral de la línea de tiempo) ---
 const LegendBox = ({ data, title, subtitle }) => {
@@ -471,30 +449,40 @@ const RenewalsDashboard = () => {
         )}
       </div>
 
-      {/* KPIs */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <KPICard title="Total" value={processed.kpis.totalDevices} icon={<Server />} color="bg-blue-500" />
-        <KPICard 
+      {/* KPIs UNIFICADOS */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 w-full">
+        <KpiCard 
+          title="Total" 
+          value={processed.kpis.totalDevices} 
+          icon={<Server />} 
+          color="blue"
+          active={!hasActiveFilter}
+          onClick={clearDrilldowns}
+        />
+        
+        <KpiCard 
           title="Activas" 
           value={processed.kpis.active} 
           icon={<CheckCircle />} 
-          color="bg-green-500"
+          color="green"
           active={drilldownKpi === 'active'}
           onClick={() => { setDrilldownKpi(drilldownKpi === 'active' ? null : 'active'); setCurrentPage(1); }} 
         />
-        <KPICard 
+        
+        <KpiCard 
           title="Por Vencer" 
           value={processed.kpis.expiringSoon} 
           icon={<Clock />} 
-          color="bg-yellow-500"
+          color="yellow"
           active={drilldownKpi === 'expiringSoon'}
           onClick={() => { setDrilldownKpi(drilldownKpi === 'expiringSoon' ? null : 'expiringSoon'); setCurrentPage(1); }} 
         />
-        <KPICard 
+        
+        <KpiCard 
           title="Expiradas" 
           value={processed.kpis.activeExpired} 
           icon={<Zap />} 
-          color="bg-purple-500"
+          color="purple"
           active={drilldownKpi === 'activeExpired'}
           onClick={() => { setDrilldownKpi(drilldownKpi === 'activeExpired' ? null : 'activeExpired'); setCurrentPage(1); }} 
         />

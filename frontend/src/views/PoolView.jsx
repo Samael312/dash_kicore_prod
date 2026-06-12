@@ -1,9 +1,10 @@
 // PoolView.jsx
 import React, { useEffect, useMemo, useState } from 'react';
 import { api } from '../services/api';
-import { Layers, Activity, Search, Loader2, ChevronRight, Copy } from 'lucide-react';
+import { Layers, Activity, Search, Loader2, ChevronRight, Copy, Users, HardDrive } from 'lucide-react';
 import TableCard from '../components/TableCard';
 import SelectDash from '../components/SelectDash';
+import KpiCard from '../components/KpiCard'; 
 import { getOrgColor } from '../utils/colors';
 
 import { Line } from 'react-chartjs-2';
@@ -54,6 +55,16 @@ const getStatusConfig = (percent) => {
 };
 
 const getBarColor = (percent) => getStatusConfig(percent).hex;
+
+const formatBytes = (bytes, decimals = 2) => {
+  const b = Number(bytes) || 0;
+  if (b <= 0) return '0 B';
+  const k = 1024;
+  const dm = decimals < 0 ? 0 : decimals;
+  const sizes = ['B', 'KB', 'MB', 'GB', 'TB', 'PB'];
+  const i = Math.floor(Math.log(b) / Math.log(k));
+  return `${parseFloat((b / Math.pow(k, i)).toFixed(dm))} ${sizes[i]}`;
+};
 
 const processSimData = (s) => {
   const val = Number(s.cons_month_mb) || 0;
@@ -303,7 +314,6 @@ const PoolView = () => {
 
   useEffect(() => {
     const fetchAll = async () => {
-      // Si ya existen datos en caché, se cargan instantáneamente sin consultar la API
       if (poolCache.pools && poolCache.m2m) {
         setRawPools(poolCache.pools);
         setRawM2M(poolCache.m2m);
@@ -316,7 +326,6 @@ const PoolView = () => {
         const poolsData = Array.isArray(poolsRes) ? poolsRes : poolsRes?.items || [];
         const m2mData = Array.isArray(m2mRes) ? m2mRes : m2mRes?.items || [];
 
-        // Guardamos en la caché global del archivo
         poolCache.pools = poolsData;
         poolCache.m2m = m2mData;
 
@@ -330,16 +339,6 @@ const PoolView = () => {
     };
     fetchAll();
   }, []);
-
-  const formatBytes = (bytes, decimals = 2) => {
-    const b = Number(bytes) || 0;
-    if (b <= 0) return '0 B';
-    const k = 1024;
-    const dm = decimals < 0 ? 0 : decimals;
-    const sizes = ['B', 'KB', 'MB', 'GB', 'TB', 'PB'];
-    const i = Math.floor(Math.log(b) / Math.log(k));
-    return `${parseFloat((b / Math.pow(k, i)).toFixed(dm))} ${sizes[i]}`;
-  };
 
   const m2mWithPoolId = useMemo(() => {
     return (rawM2M || []).map((sim, idx) => {
@@ -435,7 +434,15 @@ const PoolView = () => {
     setCurrentPage(1);
   };
 
-  const hasActiveFilter = Boolean(drillOrganization);
+  const clearAllFilters = () => {
+    setDrillOrganization(null);
+    setExpandedOrg(null);
+    setSelectedOrg('ALL');
+    setSearchTerm('');
+    setCurrentPage(1);
+  };
+
+  const hasActiveFilter = Boolean(drillOrganization || selectedOrg !== 'ALL' || searchTerm);
 
   const orgLegendRows = useMemo(() => {
     const poolIdToOrg = new Map();
@@ -531,7 +538,7 @@ const PoolView = () => {
         <div className="flex items-center gap-2">
           <Layers className="text-blue-600" />
           <h2 className="text-lg font-bold text-gray-700">Monitor de Pools de Datos</h2>
-          {hasActiveFilter && (
+          {drillOrganization && (
             <span className="ml-2 text-xs font-bold bg-blue-50 text-blue-700 border border-blue-100 px-2 py-1 rounded">
               Organización: {drillOrganization}
             </span>
@@ -559,39 +566,52 @@ const PoolView = () => {
           </div>
           {hasActiveFilter && (
             <button
-              onClick={() => { setDrillOrganization(null); setExpandedOrg(null); setCurrentPage(1); }}
+              onClick={clearAllFilters}
               className="px-3 py-2 text-xs font-bold bg-red-100 text-red-700 border border-red-200 rounded hover:bg-red-200 transition-colors"
             >
-              Limpiar filtro
+              Limpiar filtros
             </button>
           )}
         </div>
       </div>
 
-      {/* KPIS */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <div className="bg-white p-6 rounded-lg shadow-sm border-l-4 border-blue-500">
-          <p className="text-sm text-gray-500 font-medium">SIMs Totales</p>
-          <p className="text-2xl font-bold text-gray-800">{stats.totalSims}</p>
-        </div>
-        <div className="bg-white p-6 rounded-lg shadow-sm border-l-4 border-green-500">
-          <p className="text-sm text-gray-500 font-medium">SIMs Activas</p>
-          <p className="text-2xl font-bold text-gray-800">{stats.activeSims}</p>
-          <p className="text-xs text-green-600 mt-1">
-            {stats.totalSims > 0 ? ((stats.activeSims / stats.totalSims) * 100).toFixed(1) : 0}% Activación
-          </p>
-        </div>
-        <div className="bg-white p-6 rounded-lg shadow-sm border-l-4 border-purple-500">
-          <p className="text-sm text-gray-500 font-medium">Datos Consumidos (Global)</p>
-          <p className="text-2xl font-bold text-gray-800">{formatBytes(stats.consumed)}</p>
-        </div>
-        <div className="bg-white p-6 rounded-lg shadow-sm border-l-4 border-orange-500">
-          <p className="text-sm text-gray-500 font-medium">Límite Contratado</p>
-          <p className="text-2xl font-bold text-gray-800">{formatBytes(stats.limit)}</p>
-          <p className="text-xs text-orange-600 mt-1">
-            Espacio libre: {formatBytes(Math.max(0, stats.limit - stats.consumed))}
-          </p>
-        </div>
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 w-full">
+        <KpiCard
+          title="SIMs Totales"
+          value={stats.totalSims}
+          color="blue"
+          icon={<Users size={20} />}
+          // Solo se muestra ACTIVO si estamos viendo el total global sin filtros
+          active={selectedOrg === 'ALL' && !drillOrganization}
+          onClick={clearAllFilters}
+        />
+
+        <KpiCard
+          title="SIMs Activas"
+          value={stats.activeSims}
+          color="green"
+          icon={<Activity size={20} />}
+          // No forzamos el badge "ACTIVO" visual a menos que quieras destacar que hay actividad
+          active={false} 
+          subtitle={`${stats.totalSims > 0 ? ((stats.activeSims / stats.totalSims) * 100).toFixed(1) : 0}% Activación`}
+        />
+        
+        <KpiCard
+          title="Datos Consumidos"
+          value={formatBytes(stats.consumed)}
+          color="purple"
+          icon={<HardDrive size={20} />}
+          active={false}
+        />
+
+        <KpiCard
+          title="Límite Contratado"
+          value={formatBytes(stats.limit)}
+          color="orange"
+          icon={<Layers size={20} />}
+          active={false}
+          subtitle={`Espacio libre: ${formatBytes(Math.max(0, stats.limit - stats.consumed))}`}
+        />
       </div>
 
       <SelectDash
@@ -634,7 +654,7 @@ const PoolView = () => {
                   </div>
 
                   <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 mb-3 flex-shrink-0">
-                    ={STATUS_LEGEND.map(({ color, label, range }) => (
+                    {STATUS_LEGEND.map(({ color, label, range }) => (
                       <div key={label} className="flex items-center gap-1.5">
                         <span className="w-2.5 h-2.5 rounded-sm flex-shrink-0" style={{ backgroundColor: color }} />
                         <span className="text-[10px] text-gray-500 font-medium">
@@ -688,7 +708,7 @@ const PoolView = () => {
                             const entry = chartData[index];
                             const isSelected = drillOrganization && String(drillOrganization) === String(entry.commercialGroup);
                             const fill = getBarColor(entry.percent);
-                            const opacity = isSelected ? 1 : hasActiveFilter ? 0.3 : 1;
+                            const opacity = isSelected ? 1 : drillOrganization ? 0.3 : 1;
                             return (
                               <g>
                                 <rect
@@ -720,7 +740,7 @@ const PoolView = () => {
                             if (index == null || !chartData[index] || width <= 0 || height <= 0) return null;
                             const entry = chartData[index];
                             const isSelected = drillOrganization && String(drillOrganization) === String(entry.commercialGroup);
-                            const opacity = isSelected ? 1 : hasActiveFilter ? 0.3 : 1;
+                            const opacity = isSelected ? 1 : drillOrganization ? 0.3 : 1;
                             return (
                               <rect
                                 x={x} y={y} width={width} height={height}
@@ -787,21 +807,21 @@ const PoolView = () => {
           {
             header: 'Organización',
             accessor: 'organization',
-           render: (r) => {
-                         const color = getOrgColor(r.organization);
-                         return (
-                           <span
-                             className="px-2 py-1 rounded text-xs font-bold uppercase tracking-wide whitespace-nowrap"
-                             style={{
-                               backgroundColor: `${color}18`,
-                               color,
-                               border: `1px solid ${color}40`,
-                             }}
-                           >
-                             {r.organization || 'SIN ASIGNAR'}
-                           </span>
-                         );
-                       },
+            render: (r) => {
+              const color = getOrgColor(r.organization);
+              return (
+                <span
+                  className="px-2 py-1 rounded text-xs font-bold uppercase tracking-wide whitespace-nowrap"
+                  style={{
+                    backgroundColor: `${color}18`,
+                    color,
+                    border: `1px solid ${color}40`,
+                  }}
+                >
+                  {r.organization || 'SIN ASIGNAR'}
+                </span>
+              );
+            },
           },
           {
             header: 'Nombre',

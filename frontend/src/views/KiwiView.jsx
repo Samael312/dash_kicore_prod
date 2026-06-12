@@ -5,9 +5,16 @@ import TableCard from '../components/TableCard';
 import BarChartCard from '../components/BarChartCard';
 import PieChartCard from '../components/PieChartCard';
 import SelectDash from '../components/SelectDash';
+import KpiCard from '../components/KpiCard'; 
 
 import { getConsistentColor } from '../utils/colors';
-import { Loader2 } from 'lucide-react';
+import { 
+  Loader2, 
+  Layers, 
+  CheckCircle2, 
+  Cpu, 
+  RotateCcw 
+} from 'lucide-react';
 
 import {
   Chart as ChartJS,
@@ -46,7 +53,7 @@ const KiwiView = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const [rowsPerPage, setRowsPerPage] = useState(10);
 
-  // --- Drilldowns desde Gráficos ---
+  // --- Drilldowns desde Gráficos o KPIs ---
   const [drilldownSoftware, setDrilldownSoftware] = useState(null);
   const [drilldownStatus, setDrilldownStatus] = useState(null);
 
@@ -90,7 +97,7 @@ const KiwiView = () => {
       data = data.filter((d) => d.model === drilldownSoftware);
     }
 
-    // Drilldown status (PieChart)
+    // Drilldown status (PieChart o KPIs)
     if (drilldownStatus) {
       data = data.filter((d) => d.status_clean === drilldownStatus);
     }
@@ -132,6 +139,7 @@ const KiwiView = () => {
     [rawData]
   );
 
+  // Evalúa si la vista ha salido de su estado base
   const hasActiveFilter = Boolean(
     (selectedSoftware && selectedSoftware !== 'Todos') ||
       drilldownSoftware ||
@@ -160,13 +168,13 @@ const KiwiView = () => {
     <div className="flex flex-col gap-6 w-full max-w-none animate-fade-in pb-10">
       
       {/* 1. HEADER & FILTROS SUPERIORES */}
-      <div className="bg-white p-6 rounded shadow border border-gray-200 flex flex-col md:flex-row justify-between items-center w-full gap-4">
+      <div className="bg-white p-6 rounded shadow-sm border border-gray-200 flex flex-col md:flex-row justify-between items-center w-full gap-4">
         <div>
           <h2 className="text-2xl font-bold text-blue-900">🥝 Dispositivos Kiwi</h2>
           <p className="text-sm text-gray-500">Gestión de versiones y conectividad</p>
         </div>
 
-        <div className="flex items-center gap-3 w-full md:w-auto">
+        <div className="flex items-end gap-3 w-full md:w-auto">
           <div className="w-full md:w-72">
             <label className="text-xs font-bold text-gray-500 uppercase block mb-1">Filtrar por Software</label>
             <select
@@ -188,36 +196,79 @@ const KiwiView = () => {
             </select>
           </div>
 
+          {/* El botón de limpiar ahora sigue un comportamiento puramente condicional */}
           {hasActiveFilter && (
             <button
               onClick={clearAllFilters}
-              className="mt-6 md:mt-0 px-4 py-2.5 bg-red-100 text-red-700 rounded hover:bg-red-200 text-sm font-bold border border-red-200 transition-colors"
+              className="flex items-center gap-1.5 px-4 py-2.5 bg-red-50 text-red-700 rounded hover:bg-red-100 text-sm font-bold border border-red-200 shadow-sm transition-all duration-150 animate-fade-in whitespace-nowrap h-[42px]"
             >
-              Limpiar filtros ✕
+              <RotateCcw size={15} />
+              Limpiar filtros
             </button>
           )}
         </div>
       </div>
 
-      {/* 2. KPIs */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 w-full">
-        <div className="bg-white p-6 rounded shadow border-l-4 border-blue-500 flex flex-col justify-between">
-          <span className="text-gray-500 text-sm font-bold uppercase">Dispositivos Filtrados</span>
-          <span className="text-4xl font-bold text-blue-900 mt-2">{totalItems}</span>
-        </div>
+      {/* 2. NUEVOS KPIS REUTILIZABLES */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 w-full">
+        <KpiCard
+          title="Dispositivos Filtrados"
+          value={totalItems}
+          color="blue"
+          icon={<Layers size={20} />}
+          active={selectedSoftware === 'Todos' && !drilldownSoftware && !drilldownStatus}
+          onClick={() => {
+            setSelectedSoftware('Todos');
+            setDrilldownSoftware(null);
+            setDrilldownStatus(null);
+            setCurrentPage(1);
+          }}
+        />
 
-        <div className="bg-white p-6 rounded shadow border-l-4 border-green-500 flex flex-col justify-between">
-          <span className="text-gray-500 text-sm font-bold uppercase">Terminados (En Producción)</span>
-          <div className="flex items-baseline gap-2 mt-2">
-            <span className="text-4xl font-bold text-green-700">{onlineDevices}</span>
-            <span className="text-sm text-green-600 font-medium">({onlinePct}%)</span>
-          </div>
-        </div>
+        <KpiCard
+          title="Terminados (En Producción)"
+          value={onlineDevices}
+          sub={`(${onlinePct}%)`}
+          color="green"
+          icon={<CheckCircle2 size={20} />}
+          active={drilldownStatus === 'Terminado'}
+          onClick={() => {
+            // Toggle interactivo del KPI de estado
+            setDrilldownStatus(drilldownStatus === 'Terminado' ? null : 'Terminado');
+            setDrilldownSoftware(null);
+            setCurrentPage(1);
+          }}
+        />
 
-        <div className="bg-white p-6 rounded shadow border-l-4 border-purple-500 flex flex-col justify-between">
-          <span className="text-gray-500 text-sm font-bold uppercase">Variedad de Software</span>
-          <span className="text-4xl font-bold text-purple-900 mt-2">{uniqueSoftware.length}</span>
-        </div>
+        <KpiCard
+          title="Sin Terminar (En Desarrollo)"
+          value={totalItems - onlineDevices}
+          sub={`(${(100 - onlinePct).toFixed(1)}%)`}
+          color="red"
+          icon={<Layers size={20} />}
+          active={drilldownStatus === 'Sin Terminar'}
+          onClick={() => {
+            setDrilldownStatus(drilldownStatus === 'Sin Terminar' ? null : 'Sin Terminar');
+            setDrilldownSoftware(null);
+            setCurrentPage(1);
+          }}
+        />
+
+        <KpiCard
+          title="Variedad de Software"
+          value={uniqueSoftware.length}
+          color="purple"
+          icon={<Cpu size={20} />}
+          // Este KPI muestra el total absoluto de variantes, se mantiene informativo
+          active={selectedSoftware !== 'Todos' || !!drilldownSoftware}
+          onClick={() => {
+            if (selectedSoftware !== 'Todos' || drilldownSoftware) {
+              setSelectedSoftware('Todos');
+              setDrilldownSoftware(null);
+              setCurrentPage(1);
+            }
+          }}
+        />
       </div>
 
       {/* 3. SECCIONES VISUALES */}

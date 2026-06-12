@@ -1,7 +1,18 @@
 // AlarmsView.jsx
 import React, { useMemo, useEffect, useState, useCallback } from 'react';
 import { useDataCache } from '../context/DataCacheContext';
-import { Bell, Activity, Loader2, RefreshCw, AlertCircle } from 'lucide-react';
+import KpiCard from '../components/KpiCard';
+import { 
+  Bell, 
+  Activity, 
+  Loader2, 
+  RefreshCw, 
+  AlertCircle, 
+  Radio, 
+  Sliders, 
+  Wifi, 
+  AlertTriangle 
+} from 'lucide-react';
 import { api } from '../services/api';
 
 import {
@@ -32,6 +43,9 @@ const AlarmsView = () => {
   const [loadingSync, setLoadingSync] = useState(false);
   const [syncError, setSyncError] = useState(null);
   const [lastSync, setLastSync]   = useState(null);
+
+  // ── ESTADO DE DRILLDOWN (Filtro Activo) ──
+  const [activeMetric, setActiveMetric] = useState(null);
 
   // ── Solo lee BD (usa caché si existe) ──
   const readFromCache = useCallback(async () => {
@@ -68,25 +82,47 @@ const AlarmsView = () => {
     } catch (err) {
       console.error('[AlarmsView] Error en sync:', err);
       setSyncError('No se pudo sincronizar con la API de alarmas.');
-      // Intentamos mostrar lo que haya en caché/BD igualmente
       await readFromCache();
     } finally {
       setLoadingSync(false);
     }
   }, [invalidateCache, readFromCache]);
 
-  // Al montar: si hay caché la usa, si no hace sync completo
   useEffect(() => {
     if (isCached(CACHE_KEY)) {
-      console.log('📦 [AlarmsView] Datos en caché → usando caché.');
       readFromCache();
     } else {
-      console.log('🚀 [AlarmsView] Sin caché → sync completo.');
       syncAndRefresh();
     }
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ── Chart ──
+  // Métricas calculadas para los subtítulos de los KPIs
+  const kpiMetrics = useMemo(() => {
+    const total = 
+      (stats?.disconnected_device || 0) +
+      (stats?.disconnected_control || 0) +
+      (stats?.parameters || 0) +
+      (stats?.sim_high || 0) +
+      (stats?.sim_critical || 0);
+
+    const getPct = (val) => (total > 0 ? ((val / total) * 100).toFixed(1) : '0.0');
+
+    return {
+      total,
+      pctDevice: getPct(stats?.disconnected_device || 0),
+      pctControl: getPct(stats?.disconnected_control || 0),
+      pctParams: getPct(stats?.parameters || 0),
+      pctHigh: getPct(stats?.sim_high || 0),
+      pctCritical: getPct(stats?.sim_critical || 0),
+    };
+  }, [stats]);
+
+  // Manejador del toggle interactivo
+  const handleMetricToggle = (metricKey) => {
+    setActiveMetric((prev) => (prev === metricKey ? null : metricKey));
+  };
+
+  // ── Configuración de Gráfico Dinámico (Filtra las series temporales) ──
   const chartData = useMemo(() => {
     if (!history || history.length === 0) return null;
 
@@ -95,22 +131,46 @@ const AlarmsView = () => {
       return new Date(h.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     });
 
-    return {
-      labels,
-      datasets: [
-        { label: 'Instalaciones Offline', data: history.map(h => h.disconnected_device ?? 0),
-          borderColor: '#b91c1c', backgroundColor: 'transparent', fill: false, tension: 0.3, pointRadius: 2, borderWidth: 2 },
-        { label: 'Controles Offline', data: history.map(h => h.disconnected_control ?? 0),
-          borderColor: '#ef4444', backgroundColor: 'transparent', fill: false, tension: 0.3, pointRadius: 2, borderWidth: 2 },
-        { label: 'Fallo Parámetros', data: history.map(h => h.parameters ?? 0),
-          borderColor: '#f97316', backgroundColor: 'transparent', fill: false, tension: 0.3, pointRadius: 2, borderWidth: 2 },
-        { label: 'SIM Tráfico Alto', data: history.map(h => h.sim_high ?? 0),
-          borderColor: '#eab308', backgroundColor: 'transparent', fill: false, tension: 0.3, pointRadius: 2, borderWidth: 2 },
-        { label: 'SIM Tráfico Crítico', data: history.map(h => h.sim_critical ?? 0),
-          borderColor: '#000000', backgroundColor: 'transparent', fill: false, tension: 0.3, pointRadius: 2, borderWidth: 2 },
-      ],
-    };
-  }, [history]);
+    const allDatasets = [
+      { 
+        id: 'disconnected_device', 
+        label: 'Inst. Offline', 
+        data: history.map(h => h.disconnected_device ?? 0),
+        borderColor: '#b91c1c', backgroundColor: 'transparent', fill: false, tension: 0.3, pointRadius: 2, borderWidth: 2 
+      },
+      { 
+        id: 'disconnected_control', 
+        label: 'Controles Offline', 
+        data: history.map(h => h.disconnected_control ?? 0),
+        borderColor: '#f97316', backgroundColor: 'transparent', fill: false, tension: 0.3, pointRadius: 2, borderWidth: 2 
+      },
+      { 
+        id: 'parameters', 
+        label: 'Fallo Parámetros', 
+        data: history.map(h => h.parameters ?? 0),
+        borderColor: '#eab308', backgroundColor: 'transparent', fill: false, tension: 0.3, pointRadius: 2, borderWidth: 2 
+      },
+      { 
+        id: 'sim_high', 
+        label: 'SIM Tráfico Alto', 
+        data: history.map(h => h.sim_high ?? 0),
+        borderColor: '#6366f1', backgroundColor: 'transparent', fill: false, tension: 0.3, pointRadius: 2, borderWidth: 2 
+      },
+      { 
+        id: 'sim_critical', 
+        label: 'SIM Tráfico Crítico', 
+        data: history.map(h => h.sim_critical ?? 0),
+        borderColor: '#a855f7', backgroundColor: 'transparent', fill: false, tension: 0.3, pointRadius: 2, borderWidth: 2 
+      },
+    ];
+
+    // Si hay una métrica seleccionada en los KPIs, filtramos el array de datasets para mostrar solo esa línea
+    const filteredDatasets = activeMetric 
+      ? allDatasets.filter(dataset => dataset.id === activeMetric)
+      : allDatasets;
+
+    return { labels, datasets: filteredDatasets };
+  }, [history, activeMetric]);
 
   const chartOptions = {
     responsive: true,
@@ -175,7 +235,7 @@ const AlarmsView = () => {
         </div>
       </div>
 
-      {/* Error de sync (no bloquea la UI) */}
+      {/* Error de sync */}
       {syncError && (
         <div className="flex items-center gap-3 bg-red-50 border border-red-200 text-red-700 rounded-lg px-4 py-3 text-sm">
           <AlertCircle size={16} className="flex-shrink-0" />
@@ -184,45 +244,88 @@ const AlarmsView = () => {
         </div>
       )}
 
-      {/* KPI CARDS */}
+      {/* KPI CARDS INTERACTIVOS */}
       <div className="grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-5 gap-4">
-        {[
-          { label: 'Instalaciones Offline', value: stats?.disconnected_device, color: 'border-red-700',    text: 'text-red-700'    },
-          { label: 'Controles Offline',     value: stats?.disconnected_control, color: 'border-red-500',   text: 'text-red-500'    },
-          { label: 'Fallo Parámetros',      value: stats?.parameters,           color: 'border-orange-500', text: 'text-orange-600' },
-          { label: 'SIM Tráfico Alto',      value: stats?.sim_high,             color: 'border-yellow-500', text: 'text-yellow-600' },
-          { label: 'SIM Tráfico Crítico',   value: stats?.sim_critical,         color: 'border-black',      text: 'text-black'      },
-        ].map((kpi, idx) => (
-          <div key={idx} className={`bg-white p-5 rounded shadow-sm border-l-4 ${kpi.color} hover:shadow-md transition-all duration-200 relative`}>
-            {isBusy && (
-              <div className="absolute inset-0 bg-white/60 rounded flex items-center justify-center">
-                <Loader2 size={16} className="animate-spin text-gray-400" />
-              </div>
-            )}
-            <span className="text-gray-400 text-[10px] font-bold uppercase block tracking-widest">{kpi.label}</span>
-            <div className={`text-3xl font-black ${kpi.text} mt-2 tabular-nums`}>
-              {kpi.value ?? 0}
-            </div>
-          </div>
-        ))}
+        <KpiCard
+          title="Instalaciones Offline"
+          value={stats?.disconnected_device}
+          icon={<AlertCircle />}
+          color="red"
+          sub={`${kpiMetrics.pctDevice}% del total`}
+          onClick={() => handleMetricToggle('disconnected_device')}
+          active={activeMetric === 'disconnected_device'}
+          disabled={isBusy}
+        />
+        <KpiCard
+          title="Controles Offline"
+          value={stats?.disconnected_control}
+          icon={<Radio />}
+          color="orange"
+          sub={`${kpiMetrics.pctControl}% del total`}
+          onClick={() => handleMetricToggle('disconnected_control')}
+          active={activeMetric === 'disconnected_control'}
+          disabled={isBusy}
+        />
+        <KpiCard
+          title="Fallo Parámetros"
+          value={stats?.parameters}
+          icon={<Sliders />}
+          color="yellow"
+          sub={`${kpiMetrics.pctParams}% del total`}
+          onClick={() => handleMetricToggle('parameters')}
+          active={activeMetric === 'parameters'}
+          disabled={isBusy}
+        />
+        <KpiCard
+          title="SIM Tráfico Alto"
+          value={stats?.sim_high}
+          icon={<Wifi />}
+          color="indigo"
+          sub={`${kpiMetrics.pctHigh}% del total`}
+          onClick={() => handleMetricToggle('sim_high')}
+          active={activeMetric === 'sim_high'}
+          disabled={isBusy}
+        />
+        <KpiCard
+          title="SIM Tráfico Crítico"
+          value={stats?.sim_critical}
+          icon={<AlertTriangle />}
+          color="purple"
+          sub={`${kpiMetrics.pctCritical}% del total`}
+          onClick={() => handleMetricToggle('sim_critical')}
+          active={activeMetric === 'sim_critical'}
+          disabled={isBusy}
+        />
       </div>
 
       {/* HISTORICAL CHART */}
       <div className="bg-white p-6 rounded shadow-sm border border-gray-200">
-        <div className="flex items-center justify-between flex-wrap gap-2 mb-6">
+        <div className="flex items-center justify-between flex-wrap gap-4 mb-6">
           <div className="flex items-center gap-2">
             <Activity size={20} className="text-blue-600" />
             <h3 className="font-bold text-gray-700 uppercase text-xs tracking-widest">
               Evolución Temporal (Muestras cada 10 min)
             </h3>
           </div>
-          {isBusy && (
-            <span className="text-xs text-blue-500 font-semibold animate-pulse flex items-center gap-1.5 bg-blue-50 px-2.5 py-1 rounded-full border border-blue-100">
-              <Loader2 size={12} className="animate-spin" />
-              {loadingSync ? 'Consultando API de alarmas...' : 'Actualizando gráfico...'}
-            </span>
-          )}
+          
+          <div className="flex items-center gap-3">
+            {activeMetric && (
+              <button
+                onClick={() => setActiveMetric(null)}
+                className="px-3 py-1 bg-red-50 text-red-700 text-xs font-bold rounded border border-red-200 hover:bg-red-100 transition-colors"
+              >
+                Mostrar Todas las Líneas ✕
+              </button>
+            )}
+            {isBusy && (
+              <span className="text-xs text-blue-500 font-semibold animate-pulse flex items-center gap-1.5 bg-blue-50 px-2.5 py-1 rounded-full border border-blue-100">
+                <Loader2 size={12} className="animate-spin" />
+                {loadingSync ? 'Consultando API de alarmas...' : 'Actualizando gráfico...'}
+              </span>
+            )}
+          </div>
         </div>
+
         <div className="h-[380px] w-full">
           {chartData ? (
             <Line data={chartData} options={chartOptions} />

@@ -4,7 +4,18 @@ import { api } from '../services/api';
 import TableCard from '../components/TableCard';
 import PieChartCard from '../components/PieChartCard';
 import SelectDash from '../components/SelectDash';
-import { Loader2, AlertTriangle, Check } from 'lucide-react';
+import KpiCard from '../components/KpiCard';
+
+import { 
+  Loader2, 
+  AlertTriangle, 
+  Check, 
+  Wifi, 
+  WifiOff, 
+  Layers, 
+  ShieldCheck,
+  RotateCcw 
+} from 'lucide-react';
 
 import {
   Chart as ChartJS,
@@ -16,7 +27,6 @@ import {
 
 ChartJS.register(ArcElement, Title, Tooltip, Legend);
 
-// OBJETO DE CACHÉ EN MEMORIA (Persiste mientras no se recargue la pestaña del navegador)
 const installationsCache = {};
 
 const formatDate = (isoStr) => {
@@ -64,11 +74,9 @@ const InstallationsView = () => {
 
   useEffect(() => {
     const fetchData = async () => {
-      // Creamos una clave única en la caché basada en los años de umbral
       const cacheKey = `years-${activeYearsThreshold}`;
 
       if (installationsCache[cacheKey]) {
-        // Si ya existen datos para este umbral en la caché, los usamos instantáneamente
         setRawData(installationsCache[cacheKey]);
         return;
       }
@@ -79,7 +87,6 @@ const InstallationsView = () => {
         const items = Array.isArray(res) ? res : (res?.items || []);
         const mappedItems = items.map(mapInstallation);
         
-        // Guardamos en la caché antes de actualizar el estado
         installationsCache[cacheKey] = mappedItems;
         setRawData(mappedItems);
       } catch (e) {
@@ -89,7 +96,7 @@ const InstallationsView = () => {
       }
     };
     fetchData();
-  }, [activeYearsThreshold]); // Solo pedirá a la API si cambia el umbral de años y no está en caché
+  }, [activeYearsThreshold]);
 
   const handleApplyYears = () => {
     const val = parseFloat(inputYears);
@@ -98,6 +105,21 @@ const InstallationsView = () => {
     } else {
       setInputYears(String(activeYearsThreshold));
     }
+  };
+
+  // Estado base absoluto
+  const resetAllFilters = () => {
+    setSelectedEnabled('Todos');
+    setDrilldownState(null);
+    setDrilldownEnabled(null);
+    setSearchTerm('');
+    setCurrentPage(1);
+  };
+
+  const clearAllDrilldowns = () => {
+    setDrilldownState(null);
+    setDrilldownEnabled(null);
+    setCurrentPage(1);
   };
 
   const filteredByControls = useMemo(() => {
@@ -140,12 +162,6 @@ const InstallationsView = () => {
     return Object.entries(counts).map(([name, value]) => ({ name, value }));
   }, [filteredByControls]);
 
-  const clearAllDrilldowns = () => {
-    setDrilldownState(null);
-    setDrilldownEnabled(null);
-    setCurrentPage(1);
-  };
-
   const getStateColor = (label) => {
     if (label === 'Conectado') return '#00CC96';
     if (label === 'Desconectado') return '#EF553B';
@@ -158,13 +174,18 @@ const InstallationsView = () => {
     return '#94a3b8';
   };
 
+  // Condición mágica: Evalúa si modificamos el comportamiento inicial de la vista
+  const hasActiveFilters = selectedEnabled !== 'Todos' || drilldownState !== null || drilldownEnabled !== null || searchTerm !== '';
+
   return (
     <div className="flex flex-col gap-6 w-full animate-fade-in pb-10">
       
       {/* 1. HEADER Y FILTROS */}
       <div className="bg-white p-6 rounded shadow-sm border border-gray-200 w-full">
         <h2 className="text-2xl font-bold text-blue-900 mb-6">🔌 Inventario de Instalaciones</h2>
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 w-full">
+        
+        {/* El grid ahora se adapta dinámicamente si el botón está presente o no */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-6 w-full items-end">
           
           {/* SELECTOR DE ESTADO */}
           <div>
@@ -207,13 +228,15 @@ const InstallationsView = () => {
             </div>
           </div>
 
-          {(drilldownState || drilldownEnabled) && (
-            <div className="flex items-end">
+          {/* BOTÓN REINICIAR FILTROS (CONDICIONAL) */}
+          {hasActiveFilters && (
+            <div className="sm:col-span-2 md:col-span-2 animate-fade-in">
               <button
-                onClick={clearAllDrilldowns}
-                className="w-full px-4 py-2.5 bg-red-100 text-red-700 rounded hover:bg-red-200 text-sm font-bold border border-red-200 transition-colors"
+                onClick={resetAllFilters}
+                className="w-full flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-bold bg-red-50 text-red-700 border border-red-200 rounded hover:bg-red-100 shadow-sm transition-all duration-150 animate-fade-in"
               >
-                Limpiar filtro gráfico ✕
+                <RotateCcw size={16} />
+                Limpiar todos los filtros
               </button>
             </div>
           )}
@@ -229,26 +252,62 @@ const InstallationsView = () => {
       ) : (
         <>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
-            <div className="bg-white p-4 rounded shadow border-l-4 border-blue-500">
-              <span className="text-gray-500 text-xs font-bold uppercase">Total</span>
-              <p className="text-3xl font-bold text-blue-900">{totalItems}</p>
-            </div>
-            <div className="bg-white p-4 rounded shadow border-l-4 border-orange-500">
-              <span className="text-gray-500 text-xs font-bold uppercase">Obsoletas</span>
-              <p className="text-3xl font-bold text-orange-700">{stats.obsolete}</p>
-            </div>
-            <div className="bg-white p-4 rounded shadow border-l-4 border-green-500">
-              <span className="text-gray-500 text-xs font-bold uppercase">Conectados</span>
-              <p className="text-3xl font-bold text-green-700">{stats.connected} <span className="text-sm font-normal">({connectedPct}%)</span></p>
-            </div>
-            <div className="bg-white p-4 rounded shadow border-l-4 border-red-500">
-              <span className="text-gray-500 text-xs font-bold uppercase">Desconectados</span>
-              <p className="text-3xl font-bold text-red-700">{stats.disconnected}</p>
-            </div>
-            <div className="bg-white p-4 rounded shadow border-l-4 border-indigo-500">
-              <span className="text-gray-500 text-xs font-bold uppercase">Habilitados</span>
-              <p className="text-3xl font-bold text-indigo-700">{stats.enabled}</p>
-            </div>
+            <KpiCard
+              title="Total"
+              value={totalItems}
+              color="blue"
+              icon={<Layers />}
+              active={selectedEnabled === 'Todos' && !drilldownState && !drilldownEnabled}
+              onClick={() => { setSelectedEnabled('Todos'); clearAllDrilldowns(); }}
+            />
+            
+            <KpiCard
+              title="Obsoletas"
+              value={stats.obsolete}
+              color="orange"
+              icon={<AlertTriangle />}
+              active={selectedEnabled === 'Obsoletas'}
+              onClick={() => { setSelectedEnabled('Obsoletas'); clearAllDrilldowns(); }}
+            />
+            
+            <KpiCard
+              title="Conectados"
+              value={stats.connected}
+              sub={`(${connectedPct}%)`}
+              color="green"
+              icon={<Wifi />}
+              active={drilldownState === 'Conectado'}
+              onClick={() => {
+                setDrilldownState(drilldownState === 'Conectado' ? null : 'Conectado');
+                setDrilldownEnabled(null);
+                setCurrentPage(1);
+              }}
+            />
+            
+            <KpiCard
+              title="Desconectados"
+              value={stats.disconnected}
+              color="red"
+              icon={<WifiOff />}
+              active={drilldownState === 'Desconectado'}
+              onClick={() => {
+                setDrilldownState(drilldownState === 'Desconectado' ? null : 'Desconectado');
+                setDrilldownEnabled(null);
+                setCurrentPage(1);
+              }}
+            />
+            
+            <KpiCard
+              title="Habilitados"
+              value={stats.enabled}
+              color="indigo"
+              icon={<ShieldCheck />}
+              active={selectedEnabled === 'Habilitado'}
+              onClick={() => {
+                setSelectedEnabled(selectedEnabled === 'Habilitado' ? 'Todos' : 'Habilitado');
+                clearAllDrilldowns();
+              }}
+            />
           </div>
 
           {/* 3. VISUALIZACIONES */}

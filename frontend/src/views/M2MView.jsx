@@ -5,8 +5,16 @@ import TableCard from '../components/TableCard';
 import BarChartCard from '../components/BarChartCard';
 import PieChartCard from '../components/PieChartCard';
 import SelectDash from '../components/SelectDash';
+import KpiCard from '../components/KpiCard'; 
+
 import { getConsistentColor, COLORS, getOrgColor } from '../utils/colors';
-import { Loader2 } from 'lucide-react';
+import { 
+  Loader2, 
+  Layers, 
+  Bell, 
+  AlertTriangle, 
+  RotateCcw 
+} from 'lucide-react';
 
 import {
   Chart as ChartJS,
@@ -24,6 +32,18 @@ ChartJS.register(CategoryScale, LinearScale, BarElement, ArcElement, Title, Tool
 // OBJETO DE CACHÉ EN MEMORIA (Persiste entre cambios de pestañas)
 const m2mCache = {
   data: null
+};
+
+// HELPER STATS - Extraído fuera del componente para evitar recreación en cada render
+const getGroupStats = (arr, field) => {
+  const counts = arr.reduce((acc, curr) => {
+    const k = curr?.[field] || 'N/A';
+    acc[k] = (acc[k] || 0) + 1;
+    return acc;
+  }, {});
+  return Object.entries(counts)
+    .map(([name, value]) => ({ name, value }))
+    .sort((a, b) => b.value - a.value);
 };
 
 const M2MView = () => {
@@ -78,9 +98,29 @@ const M2MView = () => {
     [rawData]
   );
 
-  const hasActiveFilter = Boolean(drilldownStatus || drilldownNetwork || drilldownCountry || drilldownPlan || drilldownTier);
+  // Evalúa si la vista ha salido de su estado base global
+  const hasActiveFilter = Boolean(
+    (selectedOrg && selectedOrg !== 'Todas') ||
+      drilldownStatus || 
+      drilldownNetwork || 
+      drilldownCountry || 
+      drilldownPlan || 
+      drilldownTier ||
+      searchTerm.trim()
+  );
 
-  // Dataset base: SOLO filtros externos (TableCard hace search/paginación internos)
+  const clearAllFilters = () => {
+    setSelectedOrg('Todas');
+    setSearchTerm('');
+    setDrilldownStatus(null);
+    setDrilldownNetwork(null);
+    setDrilldownCountry(null);
+    setDrilldownPlan(null);
+    setDrilldownTier(null);
+    setCurrentPage(1);
+  };
+
+  // Dataset base: filtros combinados
   const filteredByControls = useMemo(() => {
     let data = rawData;
 
@@ -99,11 +139,11 @@ const M2MView = () => {
     return data;
   }, [rawData, selectedOrg, drilldownStatus, drilldownNetwork, drilldownCountry, drilldownPlan, drilldownTier, activeTab]);
 
-  // Reset de página al cambiar filtros externos / búsqueda / pageSize
+  // Totales y Paginación
   const totalItems = filteredByControls.length;
   const totalPages = Math.max(1, Math.ceil(totalItems / rowsPerPage));
 
-  // KPIs
+  // Cálculos para KPIs
   const totalSims = totalItems;
   const totalAlarms = useMemo(
     () => filteredByControls.reduce((sum, d) => sum + (Number(d.alarm_count) || 0), 0),
@@ -114,19 +154,7 @@ const M2MView = () => {
     [filteredByControls]
   );
 
-  // Helper stats
-  const getGroupStats = (arr, field) => {
-    const counts = arr.reduce((acc, curr) => {
-      const k = curr?.[field] || 'N/A';
-      acc[k] = (acc[k] || 0) + 1;
-      return acc;
-    }, {});
-    return Object.entries(counts)
-      .map(([name, value]) => ({ name, value }))
-      .sort((a, b) => b.value - a.value);
-  };
-
-  // Charts también desde filteredByControls (como DevicesView)
+  // Charts estadísticos
   const statusStats = useMemo(() => getGroupStats(filteredByControls, 'status_clean'), [filteredByControls]);
   const networkStats = useMemo(() => getGroupStats(filteredByControls, 'network_type'), [filteredByControls]);
   const countryStats = useMemo(() => getGroupStats(filteredByControls, 'country_code'), [filteredByControls]);
@@ -162,16 +190,17 @@ const M2MView = () => {
 
   return (
     <div className="flex flex-col gap-6 w-full max-w-none animate-fade-in pb-10">
-      {/* HEADER + filtros externos */}
-      <div className="bg-white p-6 rounded shadow-sm border border-gray-200 w-full flex items-center justify-between gap-4">
+      
+      {/* 1. HEADER & FILTROS SUPERIORES */}
+      <div className="bg-white p-6 rounded shadow-sm border border-gray-200 flex flex-col md:flex-row justify-between items-center w-full gap-4">
         <div>
           <h2 className="text-2xl font-bold text-blue-900">📡 Gestión M2M</h2>
           <p className="text-sm text-gray-500">Inventario y análisis (M2M)</p>
         </div>
 
-        <div className="flex items-end gap-3">
-          <div className="w-64">
-            <label className="block text-sm font-medium text-gray-700 mb-1">🏢 Organización</label>
+        <div className="flex items-end gap-3 w-full md:w-auto">
+          <div className="w-full md:w-64">
+            <label className="text-xs font-bold text-gray-500 uppercase block mb-1">🏢 Organización</label>
             <select
               className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 p-2.5 border bg-gray-50"
               value={selectedOrg}
@@ -185,7 +214,7 @@ const M2MView = () => {
                 setCurrentPage(1);
               }}
             >
-              <option value="Todas">Todas</option>
+              <option value="Todas">Todas las Organizaciones</option>
               {uniqueOrgs.map((o) => (
                 <option key={o} value={o}>
                   {o}
@@ -194,41 +223,48 @@ const M2MView = () => {
             </select>
           </div>
 
+          {/* BOTÓN CONDICIONAL PARA LIMPIAR FILTROS */}
           {hasActiveFilter && (
             <button
-              onClick={() => {
-                setDrilldownStatus(null);
-                setDrilldownNetwork(null);
-                setDrilldownCountry(null);
-                setDrilldownPlan(null);
-                setDrilldownTier(null);
-                setCurrentPage(1);
-              }}
-              className="px-4 py-2.5 bg-red-100 text-red-700 rounded hover:bg-red-200 text-sm font-bold border border-red-200 transition-colors"
+              onClick={clearAllFilters}
+              className="flex items-center gap-1.5 px-4 py-2.5 bg-red-50 text-red-700 rounded hover:bg-red-100 text-sm font-bold border border-red-200 shadow-sm transition-all duration-150 animate-fade-in whitespace-nowrap h-[42px]"
             >
-              Limpiar Filtros
+              <RotateCcw size={15} />
+              Limpiar filtros
             </button>
           )}
         </div>
       </div>
 
-      {/* KPIs */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 w-full">
-        <div className="bg-white p-6 rounded shadow border-l-4 border-blue-500 flex flex-col justify-between">
-          <span className="text-gray-500 text-sm font-bold uppercase">SIMs filtradas</span>
-          <span className="text-4xl font-bold text-blue-900 mt-2">{totalSims}</span>
-        </div>
-        <div className="bg-white p-6 rounded shadow border-l-4 border-red-500 flex flex-col justify-between">
-          <span className="text-gray-500 text-sm font-bold uppercase">Alarmas totales</span>
-          <span className="text-4xl font-bold text-red-700 mt-2">{totalAlarms}</span>
-        </div>
-        <div className="bg-white p-6 rounded shadow border-l-4 border-orange-500 flex flex-col justify-between">
-          <span className="text-gray-500 text-sm font-bold uppercase">SIMs con alertas</span>
-          <span className="text-4xl font-bold text-orange-700 mt-2">{simsWithAlerts}</span>
-        </div>
+      {/* 2. NUEVOS KPIS REUTILIZABLES */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 w-full">
+        <KpiCard
+          title="SIMs Filtradas"
+          value={totalSims}
+          color="blue"
+          icon={<Layers size={20} />}
+          active={selectedOrg === 'Todas' && !drilldownStatus && !drilldownNetwork && !drilldownCountry && !drilldownPlan && !drilldownTier}
+          onClick={clearAllFilters}
+        />
+
+        <KpiCard
+          title="Alarmas Totales"
+          value={totalAlarms}
+          color="red"
+          icon={<Bell size={20} />}
+          active={totalAlarms > 0}
+        />
+        
+        <KpiCard
+          title="SIMs con Alertas"
+          value={simsWithAlerts}
+          color="orange"
+          icon={<AlertTriangle size={20} />}
+          active={simsWithAlerts > 0}
+        />
       </div>
 
-      {/* Secciones controladas (SelectDash) */}
+      {/* 3. SECCIONES VISUALES (SelectDash) */}
       <SelectDash
         storageKey="m2mView:sections"
         headerTitle="Visualizaciones"
@@ -247,7 +283,8 @@ const M2MView = () => {
                 heightClass="h-72"
                 selectedLabel={drilldownStatus}
                 getColor={(i, row) => {
-                  const k = row.__label;
+                  // CORREGIDO: row.__label cambiado por row.name ya que getGroupStats devuelve {name, value}
+                  const k = row?.name; 
                   if (k === 'Activo') return '#10B981';
                   if (k === 'Desactivado') return '#F59E0B';
                   if (k === 'Listo para activar') return '#4B5563';
@@ -303,7 +340,7 @@ const M2MView = () => {
                 labelKey="name"
                 valueKey="value"
                 indexAxis='x'
-                showLegend= {true}
+                showLegend={true}
                 selectedLabel={drilldownCountry}
                 getColor={(i) => getConsistentColor(i)}
                 onBarClick={(label) => {
@@ -393,6 +430,7 @@ const M2MView = () => {
                   selectedLabel={drilldownTier}
                   onBarClick={(label) => {
                     setDrilldownTier(label);
+                    // CORREGIDO: Consistencia para limpiar el resto de drilldowns al filtrar por tier
                     setDrilldownStatus(null);
                     setDrilldownNetwork(null);
                     setDrilldownCountry(null);
@@ -406,7 +444,7 @@ const M2MView = () => {
         ]}
       />
 
-      {/* TABLA (TableCard filtra+pagina) */}
+      {/* 4. TABLA DE DETALLES INTEGRADA */}
       <TableCard
         title="Listado M2M Completo"
         data={filteredByControls}
@@ -436,14 +474,11 @@ const M2MView = () => {
             header: 'Mes (MB)', 
             accessor: 'cons_month_mb', 
             render: (r) => {
-
               const val = Number(r.cons_month_mb) || 0;
-              
               let planName = (r.rate_plan || '').toLowerCase();
               planName = planName.replace(/m2m/g, '').replace(/b2b/g, '');
 
               let limit = 0;
-
               const matchGB = planName.match(/\b(\d+)\s*gb/);
               
               if (matchGB) {

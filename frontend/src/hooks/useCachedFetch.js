@@ -3,30 +3,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useDataCache } from '../context/DataCacheContext';
 
 /**
- * Hook reutilizable para cargar datos con caché automática.
- *
- * @param {string} cacheKey   - Clave única en la caché (ej: 'devices', 'm2m')
- * @param {Function} fetcher  - Función async sin argumentos que devuelve los datos
- * @param {Object} options
- * @param {any[]} options.deps         - Dependencias extra que fuerzan re-fetch (como parámetros)
- * @param {boolean} options.skip       - Si true, no hace nada (útil para condicionales)
- * @param {any} options.initialData    - Valor inicial mientras carga
- *
- * @returns {{ data, loading, error, refresh }}
- *
- * Uso básico:
- *   const { data, loading } = useCachedFetch('devices', () => api.getDevices(1, 5000));
- *
- * Con parámetros dinámicos (la clave cambia → nueva petición si no está en caché):
- *   const { data, loading } = useCachedFetch(
- *     `installations-${years}`,
- *     () => api.getInst(1, 5000, years),
- *     { deps: [years] }
- *   );
- *
- * Forzar refresh manual:
- *   const { data, refresh } = useCachedFetch('m2m', () => api.getM2M(1, 5000));
- *   <button onClick={refresh}>Actualizar</button>
+ * Hook reutilizable para cargar datos con caché automática y vencimiento por TTL.
  */
 const useCachedFetch = (cacheKey, fetcher, { deps = [], skip = false, initialData = [] } = {}) => {
   const { getCachedData } = useDataCache();

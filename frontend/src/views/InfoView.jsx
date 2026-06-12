@@ -1,14 +1,25 @@
-// InfoView.jsx (con DashboardSectionManager e integración useCachedFetch)
+// InfoView.jsx (con DashboardSectionManager,useCachedFetch y KPIs Interactivos)
 import React, { useEffect, useMemo, useState, useRef } from 'react';
-// Importación por defecto del hook de caché del proyecto
 import useCachedFetch from '../hooks/useCachedFetch';
 import { api } from '../services/api';
 import TableCard from '../components/TableCard';
 import BarChartCard from '../components/BarChartCard';
 import PieChartCard from '../components/PieChartCard';
 import SelectDash from '../components/SelectDash';
+import KpiCard from '../components/KpiCard'; 
 import { getConsistentColor } from '../utils/colors';
-import { Smartphone, Loader2, Thermometer, HardDrive, Cpu, Wifi, Columns, Check } from 'lucide-react';
+import { 
+  Smartphone, 
+  Loader2, 
+  Thermometer, 
+  HardDrive, 
+  Cpu, 
+  Wifi, 
+  Columns, 
+  Check, 
+  Layers, 
+  CheckCircle 
+} from 'lucide-react';
 
 import {
   Chart as ChartJS,
@@ -23,25 +34,6 @@ import {
 
 ChartJS.register(CategoryScale, LinearScale, ArcElement, BarElement, Title, Tooltip, Legend);
 
-const KPI_STYLES = {
-  blue:   { border: 'border-blue-500',   text: 'text-blue-700'   },
-  green:  { border: 'border-green-500',  text: 'text-green-700'  },
-  gray:   { border: 'border-gray-400',   text: 'text-gray-700'   },
-  orange: { border: 'border-orange-500', text: 'text-orange-600' },
-  indigo: { border: 'border-indigo-500', text: 'text-indigo-700' },
-};
-
-const KpiBox = ({ title, value, color = 'blue', sub }) => {
-  const { border, text } = KPI_STYLES[color] || KPI_STYLES.blue;
-  return (
-    <div className={`bg-white p-6 rounded shadow border-l-4 ${border} flex flex-col items-center w-full text-center`}>
-      <span className="text-gray-500 text-sm uppercase font-bold tracking-wider mb-2">{title}</span>
-      <span className={`text-3xl font-bold ${text}`}>{value}</span>
-      {sub && <div className="text-xs text-gray-400 mt-2">{sub}</div>}
-    </div>
-  );
-};
-
 const formatDate = (isoStr) => {
   if (!isoStr) return '—';
   try {
@@ -54,7 +46,6 @@ const formatDate = (isoStr) => {
   } catch { return '—'; }
 };
 
-// Función para extraer solo la versión base (sin el hash)
 const getBaseVersion = (v) => {
   if (!v || v === 'N/A') return 'N/A';
   const match = v.match(/^(v\d{6}\.\d+(?:\.\d+)?)/);
@@ -139,13 +130,11 @@ const ColumnToggle = ({ visibleCols, onToggle, onReset }) => {
 };
 
 const InfoView = () => {
-  // 1. Reemplazo del fetch manual por la abstracción de caché centralizada
   const { data: fetchRes, loading } = useCachedFetch(
     'info',
     () => api.getInfo(1, 5000)
   );
 
-  // 2. Normalización reactiva y segura del set de datos crudos entrantes
   const data = useMemo(() => {
     return Array.isArray(fetchRes) ? fetchRes : [];
   }, [fetchRes]);
@@ -174,28 +163,24 @@ const InfoView = () => {
 
   const resetCols = () => setVisibleCols(new Set(ALL_COLUMNS.filter((c) => c.defaultVisible).map((c) => c.id)));
 
-  // Versiones BASE (Sin Hash) para el selector de Meta (Objetivo)
   const sortedBaseVersions = useMemo(() => {
     if (!data || data.length === 0) return [];
     const versions = [...new Set(data.map(d => getBaseVersion(d.quiiotd_version)).filter(v => v !== 'N/A'))];
     return versions.sort((a, b) => getVersionScore(b) - getVersionScore(a));
   }, [data]);
 
-  // Versiones COMPLETAS (Con Hash) para el filtro secundario
   const sortedFullVersions = useMemo(() => {
     if (!data || data.length === 0) return [];
     const versions = [...new Set(data.map(d => d.quiiotd_version).filter(v => v && v !== 'N/A'))];
     return versions.sort((a, b) => getVersionScore(b) - getVersionScore(a));
   }, [data]);
 
-  // Autoseleccionar la versión más alta (BASE) al cargar
   useEffect(() => {
     if (sortedBaseVersions.length > 0 && !referenceVersion) {
       setReferenceVersion(sortedBaseVersions[0]); 
     }
   }, [sortedBaseVersions, referenceVersion]);
 
-  // Procesar datos (Mantiene la versión completa original, solo usa la base para el estado)
   const processedData = useMemo(() => {
     return data.map((d) => {
       const fullVersionStr = d.quiiotd_version || 'N/A';
@@ -306,6 +291,22 @@ const InfoView = () => {
     setCurrentPage(1);
   };
 
+  // ── MANEJADORES DE TOGGLE INTERACTIVO PARA KPIs ──
+  const handleStatusToggle = (statusName) => {
+    setDrilldownStatus((prev) => (prev === statusName ? null : statusName));
+    setDrilldownVersion(null);
+    setDrilldownModel(null);
+    setCurrentPage(1);
+  };
+
+  const handleVersionToggle = (versionName) => {
+    if (versionName === 'N/A') return;
+    setDrilldownVersion((prev) => (prev === versionName ? null : versionName));
+    setDrilldownStatus(null);
+    setDrilldownModel(null);
+    setCurrentPage(1);
+  };
+
   const allColumnDefs = [
     {
       id: 'uuid', header: 'UUID', accessor: 'uuid',
@@ -401,7 +402,6 @@ const InfoView = () => {
     .map((c) => allColumnDefs.find((def) => def.id === c.id))
     .filter(Boolean);
 
-  // Validación de loading adaptada para no romper la UX si ya existen datos previos guardados en la caché local
   if (loading && processedData.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center h-screen bg-gray-50">
@@ -429,7 +429,6 @@ const InfoView = () => {
         </div>
         
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          {/* Dropdown para definir la versión objetivo */}
           <div className="p-3 bg-green-50 rounded-lg border border-green-200">
             <label className="block text-xs font-bold text-green-800 uppercase tracking-wide mb-1">
               Versión Objetivo (Actualizados)
@@ -446,7 +445,6 @@ const InfoView = () => {
             </select>
           </div>
 
-          {/* Filtrar por Versión Completa */}
           <div className="pt-3">
             <label className="block text-sm font-medium text-gray-700 mb-1">🔧 Filtrar por Versión</label>
             <select
@@ -473,25 +471,49 @@ const InfoView = () => {
         </div>
       </div>
 
-      {/* 2. KPIs */}
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-4 w-full">
-        <KpiBox title="Total" value={totalItems} color="blue" />
-        <KpiBox 
+      {/* 2. KPIs INTEGRADOS MEDIANTE KPICARD */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-5 gap-4 w-full">
+        <KpiCard 
+          title="Total Dispositivos" 
+          value={totalItems} 
+          color="blue" 
+          icon={<Smartphone />}
+          disabled={loading}
+        />
+        <KpiCard 
           title="Actualizados" 
           value={`${updatedPct}%`} 
           color="green"  
-          sub={
-            <>
-              <span className="bg-green-100 text-green-800 px-2 py-0.5 rounded font-mono border border-green-200">
-                Ref: {referenceVersion || 'Calculando...'}
-              </span>
-              <div className="mt-1">{updatedCount} dispositivos</div>
-            </>
-          } 
+          icon={<CheckCircle />}
+          sub={`${updatedCount} equipos en meta`} 
+          onClick={() => handleStatusToggle('Actualizado')}
+          active={drilldownStatus === 'Actualizado'}
+          disabled={loading}
         />
-        <KpiBox title="Versión común"   value={modeVersion}      color="gray"   />
-        <KpiBox title="Temp. media"     value={avgTemp}          color="orange" />
-        <KpiBox title="RAM libre media" value={avgRam}           color="indigo" />
+        <KpiCard 
+          title="Versión Común"   
+          value={modeVersion}      
+          color="gray"   
+          icon={<Layers />}
+          sub={modeVersion !== 'N/A' ? 'Click para aislar' : 'Sin datos'}
+          onClick={() => handleVersionToggle(modeVersion)}
+          active={drilldownVersion === modeVersion && modeVersion !== 'N/A'}
+          disabled={loading}
+        />
+        <KpiCard 
+          title="Temp. Media"     
+          value={avgTemp}          
+          color="orange" 
+          icon={<Thermometer />}
+          disabled={loading}
+        />
+        <KpiCard 
+          title="RAM Libre Media" 
+          value={avgRam}           
+          color="indigo" 
+          icon={<Cpu />}
+          disabled={loading}
+        />
       </div>
 
       {/* 3. VISUALIZACIONES */}
@@ -564,7 +586,7 @@ const InfoView = () => {
         ]}
       />
 
-      {/* 4. TABLA con selector de columnas */}
+      {/* 4. TABLA */}
       <div className="bg-white rounded shadow border border-gray-200 overflow-hidden">
         <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 bg-gray-50">
           <span className="text-sm font-semibold text-gray-700">Listado de dispositivos</span>

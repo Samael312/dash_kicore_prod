@@ -5,7 +5,16 @@ import useCachedFetch from '../hooks/useCachedFetch'; // Hook unificado de la ap
 import TableCard from '../components/TableCard';
 import PieChartCard from '../components/PieChartCard';
 import SelectDash from '../components/SelectDash';
-import { Loader2, Activity, ServerCrash, Network, AlertCircle } from 'lucide-react';
+import KpiCard from '../components/KpiCard'; // Importación de los nuevos KPIs comunes
+
+import { 
+  Loader2, 
+  Activity, 
+  ServerCrash, 
+  Network, 
+  AlertCircle,
+  RotateCcw 
+} from 'lucide-react';
 
 import {
   Chart as ChartJS,
@@ -163,6 +172,15 @@ const VpnView = () => {
   const totalItems = filteredData.length;
   const totalPages = Math.max(1, Math.ceil(totalItems / rowsPerPage));
 
+  const hasActiveFilter = Boolean(drilldownSync || selectedSync !== 'Todos' || searchTerm.trim() !== '');
+
+  const clearAllFilters = () => {
+    setSelectedSync('Todos');
+    setDrilldownSync(null);
+    setSearchTerm('');
+    setCurrentPage(1);
+  };
+
   if (loading) {
     return (
       <div className="flex flex-col items-center justify-center h-screen bg-gray-50">
@@ -176,29 +194,18 @@ const VpnView = () => {
     <div className="flex flex-col gap-6 w-full animate-fade-in pb-10">
       
       {/* 1. HEADER Y FILTROS */}
-      <div className="bg-white p-6 rounded shadow-sm border border-gray-200 w-full">
-        <div className="flex items-center justify-between flex-wrap gap-4 mb-6">
-          <div className="flex items-center gap-3">
+      <div className="bg-white p-6 rounded shadow-sm border border-gray-200 w-full flex flex-col md:flex-row justify-between md:items-end gap-4">
+        <div>
+          <div className="flex items-center gap-3 mb-2">
             <Network className="text-blue-900" size={28} />
             <h2 className="text-2xl font-bold text-blue-900">Comparativa Cloud vs VPN</h2>
           </div>
-          {(drilldownSync || selectedSync !== 'Todos') && (
-            <button
-              onClick={() => {
-                setSelectedSync('Todos');
-                setDrilldownSync(null);
-                setCurrentPage(1);
-              }}
-              className="px-4 py-2 bg-red-100 text-red-700 rounded hover:bg-red-200 text-sm font-bold border border-red-200 transition-colors"
-            >
-              Limpiar todos los filtros ✕
-            </button>
-          )}
+          <p className="text-sm text-gray-500">Auditoría y estado de túneles lógicos</p>
         </div>
         
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 w-full">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">🔍 Grupo de Coherencia</label>
+        <div className="flex items-end gap-3 w-full md:w-auto">
+          <div className="w-full md:w-64">
+            <label className="text-xs font-bold text-gray-500 uppercase block mb-1">🔍 Grupo de Coherencia</label>
             <select
               className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 p-2.5 border bg-gray-50 text-sm font-medium text-gray-700"
               value={selectedSync}
@@ -215,39 +222,69 @@ const VpnView = () => {
               <option value="Desabilitados">Deshabilitados en Cloud</option>
             </select>
           </div>
+
+          {/* BOTÓN CONDICIONAL PARA LIMPIAR FILTROS */}
+          {hasActiveFilter && (
+            <button
+              onClick={clearAllFilters}
+              className="flex items-center gap-1.5 px-4 py-2.5 bg-red-50 text-red-700 rounded hover:bg-red-100 text-sm font-bold border border-red-200 shadow-sm transition-all duration-150 animate-fade-in whitespace-nowrap h-[42px]"
+            >
+              <RotateCcw size={15} />
+              Limpiar filtros
+            </button>
+          )}
         </div>
       </div>
 
-      {/* 2. KPIs */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="bg-white p-4 rounded shadow border-l-4 border-blue-500 flex justify-between items-center">
-          <div>
-            <span className="text-gray-500 text-xs font-bold uppercase tracking-wider">Total Equipos</span>
-            <p className="text-3xl font-bold text-blue-900 mt-1">{totalItems}</p>
-          </div>
-          <Activity className="text-blue-200" size={40} />
-        </div>
-        <div className="bg-white p-4 rounded shadow border-l-4 border-emerald-500 flex justify-between items-center">
-          <div>
-            <span className="text-gray-500 text-xs font-bold uppercase tracking-wider">Sincronizados</span>
-            <p className="text-3xl font-bold text-emerald-700 mt-1">{stats.sincronizados}</p>
-          </div>
-          <Network className="text-emerald-200" size={40} />
-        </div>
-        <div className="bg-white p-4 rounded shadow border-l-4 border-orange-500 flex justify-between items-center">
-          <div>
-            <span className="text-gray-500 text-xs font-bold uppercase tracking-wider">Desfasados</span>
-            <p className="text-3xl font-bold text-orange-700 mt-1">{stats.desfasados}</p>
-          </div>
-          <AlertCircle className="text-orange-200" size={40} />
-        </div>
-        <div className="bg-white p-4 rounded shadow border-l-4 border-purple-500 flex justify-between items-center">
-          <div>
-            <span className="text-gray-500 text-xs font-bold uppercase tracking-wider">Sin Relación / Huérfanos</span>
-            <p className="text-3xl font-bold text-purple-700 mt-1">{stats.estructurales}</p>
-          </div>
-          <ServerCrash className="text-purple-200" size={40} />
-        </div>
+      {/* 2. KPIs REUTILIZABLES UNIFICADOS */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 w-full">
+        <KpiCard
+          title="Total Equipos"
+          value={totalItems}
+          color="blue"
+          icon={<Activity size={20} />}
+          active={selectedSync === 'Todos' && !drilldownSync}
+          onClick={clearAllFilters}
+        />
+
+        <KpiCard
+          title="Sincronizados"
+          value={stats.sincronizados}
+          color="green"
+          icon={<Network size={20} />}
+          active={selectedSync === 'Sincronizados'}
+          onClick={() => {
+            setSelectedSync(selectedSync === 'Sincronizados' ? 'Todos' : 'Sincronizados');
+            setDrilldownSync(null);
+            setCurrentPage(1);
+          }}
+        />
+
+        <KpiCard
+          title="Desfasados"
+          value={stats.desfasados}
+          color="orange"
+          icon={<AlertCircle size={20} />}
+          active={selectedSync === 'Desfasados'}
+          onClick={() => {
+            setSelectedSync(selectedSync === 'Desfasados' ? 'Todos' : 'Desfasados');
+            setDrilldownSync(null);
+            setCurrentPage(1);
+          }}
+        />
+
+        <KpiCard
+          title="Sin Relación / Huérfanos"
+          value={stats.estructurales}
+          color="purple"
+          icon={<ServerCrash size={20} />}
+          active={selectedSync === 'Estructurales'}
+          onClick={() => {
+            setSelectedSync(selectedSync === 'Estructurales' ? 'Todos' : 'Estructurales');
+            setDrilldownSync(null);
+            setCurrentPage(1);
+          }}
+        />
       </div>
 
       {/* 3. VISUALIZACIONES DINÁMICAS */}

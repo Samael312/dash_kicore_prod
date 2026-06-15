@@ -547,7 +547,7 @@ VITE_API_BASE=https://mi-dominio.com/internal/dashboard
 services:
   backend:
     build: ./backend
-    ports: ["8000:8000"]
+    ports: ["Puerto:Puerto"]
     env_file: ./backend/.env
     volumes: ["./backend:/app"]
     extra_hosts:
@@ -555,13 +555,13 @@ services:
 
   frontend:
     build: ./frontend
-    ports: ["5173:5173"]
+    ports: ["Puerto:Puerto"]
     volumes:
       - ./frontend:/app
       - /app/node_modules   # Evita sobreescribir node_modules del contenedor
     depends_on: [backend]
     environment:
-      - VITE_API_BASE=https://metrics.kiconex.com/internal/dashboard
+      - VITE_API_BASE=Ruta del FastAPI
 ```
 
 ### Producción
@@ -571,8 +571,8 @@ Para producción, en lugar de `npm run dev` se construye el frontend con `npm ru
 El `vite.config.js` incluye configuración para que el HMR funcione detrás de un proxy inverso:
 ```javascript
 server: {
-  allowedHosts: ['metrics.kiconex.com'],
-  hmr: { clientPort: 443 }
+  allowedHosts: ['Dominio en el Host'],
+  hmr: { clientPort: 'Puerto' }
 }
 ```
 
